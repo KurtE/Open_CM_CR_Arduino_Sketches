@@ -72,11 +72,6 @@
 #define AX_PUNCH_L                  48
 #define AX_PUNCH_H                  49
 
-/* poses:
-    PROGMEM prog_uint16_t name[ ] = {4,512,512,482,542}; // first number is # of servos
-   sequences:
-    PROGMEM transition_t name[] = {{NULL,count},{pose_name,1000},...}
-*/
 
 #include <DynamixelSDK.h>
 
@@ -108,7 +103,8 @@ class cm904Controller
 
     uint8_t getServoByte(uint8_t id, uint8_t reg);
     uint16_t getServoWord(uint8_t id, uint8_t reg);
-    void setServoByte(uint8_t id, uint8_t reg, uint8_t val);
+    bool setServoByte(uint8_t id, uint8_t reg, uint8_t val);
+    bool setServoWord(uint8_t id, uint8_t reg, uint16_t val);
     void setRegOnAllServos(uint8_t bReg, uint8_t bVal);
 
     /* Pose Manipulation */

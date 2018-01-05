@@ -1040,7 +1040,6 @@ void loop(void)
       //delay(600);
     } 
     else {
-      Serial.println("FreeServos called");
       g_ServoDriver.FreeServos();
       Eyes = 0;
     }
@@ -1148,7 +1147,7 @@ boolean CheckVoltage() {
   } 
   else if ((Voltage > cTurnOnVol) && (Voltage < 1999)) {
 #ifdef DBGSerial
-    DBGSerial.print(F("Voltage restored: "));
+    DBGSerial.print("Voltage restored: ");
     DBGSerial.println(Voltage, DEC);
 #endif          
     g_fLowVoltageShutdown = 0;
@@ -2226,17 +2225,17 @@ boolean TerminalMonitor(void)
   int ch;
   // See if we need to output a prompt.
   if (g_fShowDebugPrompt) {
-    DBGSerial.println(F("Arduino Phoenix Monitor"));
-    DBGSerial.println(F("D - Toggle debug on or off"));
+    DBGSerial.println("Arduino Phoenix Monitor");
+    DBGSerial.println("D - Toggle debug on or off");
 #ifdef OPT_DUMP_EEPROM
-    DBGSerial.println(F("E - Dump EEPROM"));
+    DBGSerial.println("E - Dump EEPROM");
 #endif
 #ifdef QUADMODE
-//	DBGSerial.println(F("B <percent>"));
-    DBGSerial.println(F("G ST NL RR RF LR LF"));
+//	DBGSerial.println("B <percent>");
+    DBGSerial.println("G ST NL RR RF LR LF");
 #endif
 #ifdef OPT_DYNAMIC_ADJUST_LEGS
-    DBGSerial.println(F("I pos ang"));
+    DBGSerial.println("I pos ang");
 #endif
 #ifdef OPT_TERMINAL_MONITOR_IC    // Allow the input controller to define stuff as well
     g_InputController.ShowTerminalCommandList(); 
@@ -2269,9 +2268,9 @@ boolean TerminalMonitor(void)
         break;
     }
     if (ich) {
-    DBGSerial.print(F("Serial Cmd Line:"));        
+    DBGSerial.print("Serial Cmd Line:");        
     DBGSerial.write(szCmdLine, ich);
-    DBGSerial.println(F("<eol>"));
+    DBGSerial.println("<eol>");
     }
     // So see what are command is.
     if (!ich)  {
@@ -2280,9 +2279,9 @@ boolean TerminalMonitor(void)
     else if ((ich == 1) && ((szCmdLine[0] == 'd') || (szCmdLine[0] == 'D'))) {
       g_fDebugOutput = !g_fDebugOutput;
       if (g_fDebugOutput) 
-        DBGSerial.println(F("Debug is on"));
+        DBGSerial.println("Debug is on");
       else
-        DBGSerial.println(F("Debug is off"));
+        DBGSerial.println("Debug is off");
     } 
 #ifdef OPT_DUMP_EEPROM
     else if (((szCmdLine[0] == 'e') || (szCmdLine[0] == 'E'))) {

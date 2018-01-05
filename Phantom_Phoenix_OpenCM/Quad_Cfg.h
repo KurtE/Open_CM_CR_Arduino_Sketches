@@ -267,11 +267,11 @@
 
 
 #ifdef DEFINE_HEX_GLOBALS
-const byte g_abHexIntXZ[] PROGMEM = {cHexInitXZ, 130, 110};
-const byte g_abHexMaxBodyY[] PROGMEM = { 30, 60, MAX_BODY_Y};
+const byte g_abHexIntXZ[] = {cHexInitXZ, 130, 110};
+const byte g_abHexMaxBodyY[] = { 30, 60, MAX_BODY_Y};
 #else
-extern const byte g_abHexIntXZ[] PROGMEM;
-extern const byte g_abHexMaxBodyY[] PROGMEM;
+extern const byte g_abHexIntXZ[];
+extern const byte g_abHexMaxBodyY[];
 #endif
 
 #define cRRInitPosX     CHexInitXZCos60      //Start positions of the Right Rear leg

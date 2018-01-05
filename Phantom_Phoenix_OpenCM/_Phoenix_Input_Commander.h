@@ -1,4 +1,5 @@
 //#define DEBUG_COMMANDER
+#ifdef USECOMMANDER
 
 //====================================================================
 //Project Lynxmotion Phoenix
@@ -576,7 +577,7 @@ void CommanderTurnRobotOff(void)
 //==============================================================================
 void CommanderInputController::ShowTerminalCommandList(void) 
 {
-  DBGSerial.println(F("X - Show XBee Info"));
+  DBGSerial.println("X - Show XBee Info");
 }
 //==============================================================================
 // ReadBytesUntil - as CM904 stream readBytes code is failing.
@@ -628,7 +629,7 @@ boolean CommanderInputController::ProcessTerminalCommand(byte *psz, byte bLen)
     char ab[10];
     //int cbRead;
     delay(15);  // see if we have fast command mode enabled.
-    XBeeSerial.print(F("+++")); 
+    XBeeSerial.print("+++"); 
     XBeeSerial.flush();
     XBeeSerial.setTimeout(20);  // give a little extra time
     if (ReadBytesUntil(20, '\r', ab, 10) > 0) {
@@ -695,7 +696,7 @@ void Commander::begin(unsigned long baud){
   // There is an OK<cr>.  So check for this and try to exit
 #ifdef NOT_SURE_WHY_NEEDED_SOMETIMES
   XBeeSerial.begin(9600);  
-  XBeeSerial.println(F("ATCN"));  // Tell it to bail quickly
+  XBeeSerial.println("ATCN");  // Tell it to bail quickly
   delay(25);
   XBeeSerial.end();
   delay(25);
@@ -707,12 +708,12 @@ void Commander::begin(unsigned long baud){
   while (XBeeSerial.available()) XBeeSerial.read();
   // First lets see if we have a real short command time
   delay(15);  // see if we have fast command mode enabled.
-  XBeeSerial.print(F("+++")); 
+  XBeeSerial.print("+++"); 
   XBeeSerial.flush();
   XBeeSerial.setTimeout(20);  // give a little extra time
   Serial.println("After set timeout");
   if (ReadBytesUntil(20, '\r', ab, 10) > 0) {
-    XBeeSerial.println(F("ATCN"));	          // and exit command mode
+    XBeeSerial.println("ATCN");	          // and exit command mode
     Serial.println("+++ returned data quickly");
     return;  // bail out quick
   }
@@ -721,15 +722,15 @@ void Commander::begin(unsigned long baud){
   delay(1100);
   Serial.println("XBee try long delay");
   while (XBeeSerial.available()) XBeeSerial.read();
-  XBeeSerial.print(F("+++"));
+  XBeeSerial.print("+++");
   XBeeSerial.setTimeout(1100);  // little over a second
   if (ReadBytesUntil(1100, '\r', ab, 10) > 0) {
     // Note: we could check a few more things here if we run into issues.  Like: MY!=0
     // or MY != DL
     Serial.println("XBee long dealy worked set short delay ");
-    XBeeSerial.println(F("ATGT 5"));              // Set a quick command mode
-    XBeeSerial.println(F("ATWR"));	          // Write out the changes
-    XBeeSerial.println(F("ATCN"));	          // and exit command mode
+    XBeeSerial.println("ATGT 5");              // Set a quick command mode
+    XBeeSerial.println("ATWR");	          // Write out the changes
+    XBeeSerial.println("ATCN");	          // and exit command mode
     return;  // It is already at 38400, so assume already init.
   }
   // Failed, so check to see if we can communicate at 9600
@@ -739,7 +740,7 @@ void Commander::begin(unsigned long baud){
   while (XBeeSerial.available()) XBeeSerial.read();
 
   delay(1100);
-  XBeeSerial.print(F("+++"));
+  XBeeSerial.print("+++");
   if (ReadBytesUntil(1100, '\r', ab, 10) == 0) {
     // failed blink fast
     Serial.println("XBee failed configure");
@@ -751,20 +752,20 @@ void Commander::begin(unsigned long baud){
   } 
   else {
     // So we entered command mode, lets set the appropriate stuff. 
-    XBeeSerial.println(F("ATBD 5"));  // 38400
-    XBeeSerial.print(F("ATID "));
+    XBeeSerial.println("ATBD 5");  // 38400
+    XBeeSerial.print("ATID ");
     XBeeSerial.println(DEFAULT_ID, HEX);
 
-    XBeeSerial.print(F("ATMY "));
+    XBeeSerial.print("ATMY ");
     XBeeSerial.println(DEFAULT_MY, HEX);
 
-    XBeeSerial.println(F("ATDH 0"));
-    XBeeSerial.print(F("ATDL "));
+    XBeeSerial.println("ATDH 0");
+    XBeeSerial.print("ATDL ");
     XBeeSerial.println(DEFAULT_DL, HEX);
 
-    XBeeSerial.println(F("ATGT 5"));    // Set a quick command mode
-    XBeeSerial.println(F("ATWR"));	// Write out the changes
-    XBeeSerial.println(F("ATCN"));	// and exit command mode
+    XBeeSerial.println("ATGT 5");    // Set a quick command mode
+    XBeeSerial.println("ATWR");	// Write out the changes
+    XBeeSerial.println("ATCN");	// and exit command mode
     XBeeSerial.flush();              // make sure all has been output
     // lets do a quick and dirty test
     delay(250);  // Wait a bit for responses..
@@ -850,8 +851,4 @@ int Commander::ReadMsgs(){
 //==============================================================================
 //==============================================================================
 
-
-
-
-
-
+#endif // USECOMMANDER

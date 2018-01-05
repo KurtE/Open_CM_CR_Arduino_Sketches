@@ -72,13 +72,23 @@ uint8_t cm904Controller::getServoByte(uint8_t id, uint8_t reg) {
 uint16_t cm904Controller::getServoWord(uint8_t id, uint8_t reg) {
   uint16_t val;
   uint8_t dxl_error = 0;                          // Dynamixel error
-  packetHandler->read2ByteTxRx(portHandler, id, reg, &val, &dxl_error);
+  int ret = packetHandler->read2ByteTxRx(portHandler, id, reg, &val, &dxl_error);
+  if (ret != COMM_SUCCESS) return 0xffff;
   return val;
 }
 
-void cm904Controller::setServoByte(uint8_t id, uint8_t reg, uint8_t val)
+bool cm904Controller::setServoByte(uint8_t id, uint8_t reg, uint8_t val)
 {
-  packetHandler->write1ByteTxRx(portHandler, id, reg, val); 
+  uint8_t error;
+  int ret = packetHandler->write1ByteTxRx(portHandler, id, reg, val, &error); 
+  return ((ret == COMM_SUCCESS) && (error == 0));
+}
+
+bool cm904Controller::setServoWord(uint8_t id, uint8_t reg, uint16_t val)
+{
+  uint8_t error;
+  int ret = packetHandler->write2ByteTxRx(portHandler, id, reg, val, &error); 
+  return ((ret == COMM_SUCCESS) && (error == 0));
 }
 
 //--------------------------------------------------------------------

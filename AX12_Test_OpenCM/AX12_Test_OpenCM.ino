@@ -19,8 +19,8 @@
 //#define TURRET
 #define DEBUG_IO_PINS
 
-#define DEFAULT_PORTHANDLER 1
-//#define DEFAULT_PORTHANDLER 3
+//#define DEFAULT_PORTHANDLER 1
+#define DEFAULT_PORTHANDLER 3
 
 //#define VOLTAGE_ANALOG_PIN 0
 //#define SOUND_PIN 1
@@ -70,7 +70,7 @@
 #define     TURRET_TILT   21
 #endif
 
-static const byte pgm_axdIDs[] PROGMEM = {
+static const byte pgm_axdIDs[] = {
   LF_COXA, LF_FEMUR, LF_TIBIA,
 #ifndef QUAD_MODE
   LM_COXA, LM_FEMUR, LM_TIBIA,
@@ -207,11 +207,18 @@ void setup() {
   // Get methods and members of Protocol1PacketHandler or Protocol2PacketHandler
   packetHandler = dynamixel::PacketHandler::getPacketHandler(PROTOCOL_VERSION);
   // Open port
-  if (!portHandler->openPort()) {
-    Serial.print("Failed to open the Dynamixel port!\n");
+  // Lets init the two different port handlers. 
+  if (!portHandler1->openPort()) {
+    Serial.print("Failed to open port 1 the Dynamixel port!\n");
   }
-  if (!portHandler->setBaudRate(DXL_BAUDRATE)) {
-    Serial.print("Failed to change the Dynamixel baudrate!\n");
+  if (!portHandler1->setBaudRate(DXL_BAUDRATE)) {
+    Serial.print("Failed to change the Port 1 Dynamixel baudrate!\n");
+  }
+  if (!portHandler3->openPort()) {
+    Serial.print("Failed to open port 3 the Dynamixel port!\n");
+  }
+  if (!portHandler3->setBaudRate(DXL_BAUDRATE)) {
+    Serial.print("Failed to change the Port 3 Dynamixel baudrate!\n");
   }
   delay(250);
 
@@ -337,7 +344,7 @@ uint8_t GetCommandLine(void) {
   }
 }
 
-//
+//=======================================================================================
 boolean FGetNextCmdNum(word * pw ) {
   // Skip all leading num number characters...
   while ((g_aszCmdLine[g_iszCmdLine] < '0') || (g_aszCmdLine[g_iszCmdLine] > '9')) {
@@ -358,14 +365,48 @@ void AllServosOff(void) {
   for (int i = 0; i < NUM_SERVOS; i++) {
     packetHandler->write1ByteTxRx(portHandler, pgm_axdIDs[i], AX_TORQUE_ENABLE, 0x0);
   }
+
 }
+
+//=======================================================================================
+bool ReportAnyErrors(const char *psz, uint8_t servo_id, int retval, uint8_t error) {
+
+  if ((retval == COMM_SUCCESS) && (error == 0)) return false; // no error
+  Serial.print(psz);
+  Serial.print(":");
+  Serial.print(servo_id, DEC);
+  Serial.print("(");
+  switch (retval) {
+    case COMM_PORT_BUSY : Serial.print("BUSY"); break;
+    case COMM_TX_FAIL   : Serial.print("TX FAIL"); break;
+    case COMM_RX_FAIL   : Serial.print("RX FAIL"); break;
+    case COMM_TX_ERROR  : Serial.print("TX ERROR"); break;
+    case COMM_RX_WAITING: Serial.print("RX WAIT"); break;
+    case COMM_RX_TIMEOUT: Serial.print("TIMEOUT"); break;
+    case COMM_RX_CORRUPT: Serial.print("CORRUPT"); break;
+    default: Serial.print(retval, DEC);
+  }
+  Serial.print(",");
+  Serial.print(error, HEX);
+  Serial.print(") ");  
+}
+
 //=======================================================================================
 void AllServosCenter(void) {
+  bool any_errors = false;
+  uint8_t error;
+  int retval;
+  // First make sure all of the motors are turned on. 
   for (int i = 0; i < NUM_SERVOS; i++) {
-    // See if this turns the motor off and I can turn it back on...
-    packetHandler->write1ByteTxRx(portHandler, pgm_axdIDs[i], AX_TORQUE_ENABLE, 0x1);
-    packetHandler->write2ByteTxRx(portHandler, pgm_axdIDs[i], AX_GOAL_POSITION_L, 0x1ff);
+    retval = packetHandler->write1ByteTxRx(portHandler, pgm_axdIDs[i], AX_TORQUE_ENABLE, 0x1, &error);
+    any_errors |= ReportAnyErrors("TQ ON", pgm_axdIDs[i], retval, error);
   }
+  delay(2); // give servo some time to handle torque on...
+  for (int i = 0; i < NUM_SERVOS; i++) {
+    retval = packetHandler->write2ByteTxRx(portHandler, pgm_axdIDs[i], AX_GOAL_POSITION_L, 0x1ff, &error);
+    any_errors |= ReportAnyErrors("Goal", pgm_axdIDs[i], retval, error);
+  }
+  if (any_errors) Serial.println();
 }
 //=======================================================================================
 void HoldOrFreeServos(byte fHold) {

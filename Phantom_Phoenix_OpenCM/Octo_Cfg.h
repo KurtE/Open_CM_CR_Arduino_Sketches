@@ -338,11 +338,11 @@
 #define CNT_HEX_INITS 2
 #define MAX_BODY_Y  150
 #ifdef DEFINE_HEX_GLOBALS
-const byte g_abHexIntXZ[] PROGMEM = {cHexInitXZ, 144};
-const byte g_abHexMaxBodyY[] PROGMEM = { 20, MAX_BODY_Y};
+const byte g_abHexIntXZ[] = {cHexInitXZ, 144};
+const byte g_abHexMaxBodyY[] = { 20, MAX_BODY_Y};
 #else
-extern const byte g_abHexIntXZ[] PROGMEM;
-extern const byte g_abHexMaxBodyY[] PROGMEM;
+extern const byte g_abHexIntXZ[];
+extern const byte g_abHexMaxBodyY[];
 #endif
 
 #define cRRInitPosX     CHexInitXZCos60      //Start positions of the Right Rear leg

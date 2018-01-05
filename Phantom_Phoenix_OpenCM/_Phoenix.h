@@ -89,7 +89,7 @@ extern long GetCmdLineNum(byte **ppszCmdLine);
 extern boolean g_fDBGHandleError;
 
 #ifdef c4DOF
-extern const byte cTarsLength[] PROGMEM;
+extern const byte cTarsLength[];
 #endif
 
 #ifdef OPT_BACKGROUND_PROCESS

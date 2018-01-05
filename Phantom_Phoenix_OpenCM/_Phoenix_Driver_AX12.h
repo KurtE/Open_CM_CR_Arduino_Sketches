@@ -51,7 +51,7 @@
 // Global - Local to this file only...
 //=============================================================================
 #ifdef QUADMODE
-static const byte cPinTable[] PROGMEM = {
+static const byte cPinTable[] = {
   cRRCoxaPin,  cRFCoxaPin,  cLRCoxaPin,  cLFCoxaPin,
   cRRFemurPin, cRFFemurPin, cLRFemurPin, cLFFemurPin,
   cRRTibiaPin, cRFTibiaPin, cLRTibiaPin, cLFTibiaPin
@@ -63,7 +63,7 @@ static const byte cPinTable[] PROGMEM = {
 #endif
 };
 #elif defined(OCTOMODE)
-static const byte cPinTable[] PROGMEM = {
+static const byte cPinTable[] = {
   cRRCoxaPin,  cRMRCoxaPin,  cRMFCoxaPin,  cRFCoxaPin,  cLRCoxaPin,   cLMRCoxaPin,  cLMFCoxaPin,  cLFCoxaPin,
   cRRFemurPin, cRMRFemurPin, cRMFFemurPin, cRFFemurPin, cLRFemurPin,  cLMRFemurPin, cLMFFemurPin, cLFFemurPin,
   cRRTibiaPin, cRMRTibiaPin, cRMFTibiaPin, cRFTibiaPin, cLRTibiaPin,  cLMRTibiaPin, cLMFTibiaPin, cLFTibiaPin
@@ -72,7 +72,7 @@ static const byte cPinTable[] PROGMEM = {
 #endif
 };
 #else
-static const byte cPinTable[] PROGMEM = {
+static const byte cPinTable[] = {
   cRRCoxaPin,  cRMCoxaPin,  cRFCoxaPin,  cLRCoxaPin,  cLMCoxaPin,  cLFCoxaPin,
   cRRFemurPin, cRMFemurPin, cRFFemurPin, cLRFemurPin, cLMFemurPin, cLFFemurPin,
   cRRTibiaPin, cRMTibiaPin, cRFTibiaPin, cLRTibiaPin, cLMTibiaPin, cLFTibiaPin
@@ -95,8 +95,8 @@ static const byte cPinTable[] PROGMEM = {
 #endif
 // Not sure yet if I will use the controller class or not, but...
 cm904Controller cm904 = cm904Controller();  // Use two phase initialization.
-boolean g_fServosFree;    // Are the servos in a free state?
-
+uint32_t g_servos_torque_enabled = 0;    // Are the servos in a free state?
+uint32_t g_servos_torque_errors = 0;    //
 
 //============================================================================================
 // Lets try rolling our own GPSequence code here...
@@ -137,7 +137,7 @@ extern void EEPROMReadData(word wStart, uint8_t *pv, byte cnt);
 extern void EEPROMWriteData(word wStart, uint8_t *pv, byte cnt);
 extern void TCSetServoID(byte *psz);
 extern void TCTrackServos();
-
+extern void TCWiggleServos();
 
 //--------------------------------------------------------------------
 //Init
@@ -145,7 +145,8 @@ extern void TCTrackServos();
 void ServoDriver::Init(void) {
   // First lets get the actual servo positions for all of our servos...
   //  pinMode(0, OUTPUT);
-  g_fServosFree = true;
+  g_servos_torque_enabled = 0;
+  g_servos_torque_errors = 0;
   cm904.setup(1000000, NUMSERVOS);
 
   cm904.poseSize = NUMSERVOS;
@@ -420,7 +421,7 @@ void ServoDriver::CommitServoDriver(word wMoveTime)
 //--------------------------------------------------------------------
 void ServoDriver::FreeServos(void)
 {
-  if (!g_fServosFree) {
+  if (g_servos_torque_enabled) {  // Are there any servos that are active?
     g_InputController.AllowControllerInterrupts(false);    // If on xbee on hserial tell hserial to not processess...
     cm904.setRegOnAllServos(AX_TORQUE_ENABLE, 0);  // do this as one statement...
 #if 0
@@ -429,8 +430,9 @@ void ServoDriver::FreeServos(void)
     }
 #endif
     g_InputController.AllowControllerInterrupts(true);
-    g_fServosFree = true;
+    g_servos_torque_enabled = 0;
   }
+  g_servos_torque_errors = 0; // assume no errors
 }
 
 //--------------------------------------------------------------------
@@ -459,21 +461,45 @@ void ServoDriver::IdleTime(void)
 void MakeSureServosAreOn(void)
 {
   if (ServosEnabled) {
-    if (!g_fServosFree)
+    // If we logically have turned serovs on and there were no errors we can bypass this
+//    if (g_servos_torque_enabled && !g_servos_torque_errors)
+    if (g_servos_torque_enabled)
       return;    // we are not free
 
     g_InputController.AllowControllerInterrupts(false);    // If on xbee on hserial tell hserial to not processess...
     cm904.readPose();
 
-    cm904.setRegOnAllServos(AX_TORQUE_ENABLE, 1);  // Use sync write to do it.
-
-#if 0
+//    cm904.setRegOnAllServos(AX_TORQUE_ENABLE, 1);  // Use sync write to do it.
+    uint32_t servo_mask = 1;
+    bool any_servos_updated = false;
     for (byte i = 0; i < NUMSERVOS; i++) {
-      TorqueOn(cPinTable[i]);
-    }
+      if ((g_servos_torque_enabled & servo_mask) == 0) {
+        bool succeeded = cm904.setServoByte(cPinTable[i], AX_TORQUE_ENABLE, 1);
+        if (succeeded)  {any_servos_updated = true;
+          g_servos_torque_enabled |= servo_mask;
+          if (g_servos_torque_errors & servo_mask)  {
+            g_servos_torque_errors &= ~servo_mask;
+#ifdef DBGSerial            
+            DBGSerial.print("Torque enabled after error on servo #");
+            DBGSerial.println(cPinTable[i]);
 #endif
+          }
+        } else {
+          if ((g_servos_torque_errors & servo_mask) == 0) {
+            g_servos_torque_errors |= servo_mask;
+#ifdef DBGSerial            
+            DBGSerial.print("Torque enable failed on servo #");
+            DBGSerial.println(cPinTable[i]);
+#endif
+          }
+        }
+      }
+      servo_mask <<= 1;
+    }
     g_InputController.AllowControllerInterrupts(true);
-    g_fServosFree = false;
+    if (any_servos_updated) {
+      delay(2); // give time for the servos to power up
+    }
   }
 }
 
@@ -512,15 +538,16 @@ void  ServoDriver::BackgroundProcess(void)
 //==============================================================================
 void ServoDriver::ShowTerminalCommandList(void)
 {
-  DBGSerial.println(F("V - Voltage"));
-  DBGSerial.println(F("M - Toggle Motors on or off"));
-  DBGSerial.println(F("F<frame length> - FL in ms"));    // BUGBUG::
-  DBGSerial.println(F("A - Toggle AX12 speed control"));
-  DBGSerial.println(F("T - Test Servos"));
-  DBGSerial.println(F("I - Set Id <frm> <to"));
-  DBGSerial.println(F("S - Track Servos"));
+  DBGSerial.println("V - Voltage");
+  DBGSerial.println("M - Toggle Motors on or off");
+  DBGSerial.println("F<frame length> - FL in ms");    // BUGBUG::
+  DBGSerial.println("A - Toggle AX12 speed control");
+  DBGSerial.println("T - Test Servos");
+  DBGSerial.println("I - Set Id <frm> <to");
+  DBGSerial.println("S - Track Servos");
+  DBGSerial.println("W - Wiggle Test");
 #ifdef OPT_FIND_SERVO_OFFSETS
-  DBGSerial.println(F("O - Enter Servo offset mode"));
+  DBGSerial.println("O - Enter Servo offset mode");
 #endif
 }
 
@@ -533,21 +560,21 @@ boolean ServoDriver::ProcessTerminalCommand(byte *psz, byte bLen)
   if ((bLen == 1) && ((*psz == 'm') || (*psz == 'M'))) {
     g_fEnableServos = !g_fEnableServos;
     if (g_fEnableServos)
-      DBGSerial.println(F("Motors are on"));
+      DBGSerial.println("Motors are on");
     else
-      DBGSerial.println(F("Motors are off"));
+      DBGSerial.println("Motors are off");
 
     return true;
   }
   if ((bLen == 1) && ((*psz == 'v') || (*psz == 'V'))) {
-    DBGSerial.print(F("Voltage: "));
+    DBGSerial.print("Voltage: ");
     DBGSerial.println(GetBatteryVoltage(), DEC);
 #ifdef cVoltagePin
     DBGSerial.print("Raw Analog: ");
     DBGSerial.println(analogRead(cVoltagePin));
 #endif
 
-    DBGSerial.print(F("From Servo 2: "));
+    DBGSerial.print("From Servo 2: ");
     DBGSerial.println(cm904.getServoByte (2, AX_PRESENT_VOLTAGE), DEC);
   }
 
@@ -557,9 +584,9 @@ boolean ServoDriver::ProcessTerminalCommand(byte *psz, byte bLen)
       int iPos;
       iPos = cm904.getServoWord(i, AX_PRESENT_POSITION_L);
       DBGSerial.print(i, DEC);
-      DBGSerial.print(F("="));
+      DBGSerial.print("=");
       DBGSerial.println(iPos, DEC);
-      delay(25);
+      delay(5);
     }
   }
   if ((*psz == 'i') || (*psz == 'I')) {
@@ -567,6 +594,10 @@ boolean ServoDriver::ProcessTerminalCommand(byte *psz, byte bLen)
   }
   if ((*psz == 's') || (*psz == 'S')) {
     TCTrackServos();
+  }
+
+  if ((*psz == 'w') || (*psz == 'W')) {
+    TCWiggleServos();
   }
 
   if ((bLen >= 1) && ((*psz == 'f') || (*psz == 'F'))) {
@@ -578,7 +609,7 @@ boolean ServoDriver::ProcessTerminalCommand(byte *psz, byte bLen)
       bFrame = bFrame * 10 + *psz++ - '0';
     }
     if (bFrame != 0) {
-      DBGSerial.print(F("New Servo Cycles per second: "));
+      DBGSerial.print("New Servo Cycles per second: ");
       DBGSerial.println(1000 / bFrame, DEC);
       extern cm904Controller bioloid;
       cm904.frameLength = bFrame;
@@ -668,6 +699,47 @@ void TCTrackServos()
 
 }
 
+//==============================================================================
+// TCWiggleServos - Lets set a mode to track servos.  Can use to help figure out
+// proper initial positions and min/max values...
+//==============================================================================
+void TCWiggleServos()
+{
+  // Clear out any pending input characters
+  while (DBGSerial.read() != -1)
+    ;
+
+  uint8_t iServo = 0;
+  while (!DBGSerial.available()) {
+    DBGSerial.print("Servo: ");
+    DBGSerial.print(cPinTable[iServo], DEC);
+    DBGSerial.print("(");
+    DBGSerial.print(iServo, DEC);
+    DBGSerial.print(") ");
+    uint16_t w = cm904.getServoWord(cPinTable[iServo], AX_PRESENT_POSITION_L);
+    DBGSerial.print(w, DEC);
+    DBGSerial.print(" ");
+    uint8_t servo_enabled = cm904.getServoByte(cPinTable[iServo], AX_TORQUE_ENABLE);
+    DBGSerial.println(servo_enabled, DEC);
+    if (w != 0xffff) {
+
+      cm904.setServoByte(cPinTable[iServo], AX_TORQUE_ENABLE, 1);  // Use sync write to do it.
+
+      cm904.setServoWord(cPinTable[iServo], AX_GOAL_POSITION_L, w-50);
+      delay(500);
+      cm904.setServoWord(cPinTable[iServo], AX_GOAL_POSITION_L, w+50);
+      delay(500);
+      cm904.setServoWord(cPinTable[iServo], AX_GOAL_POSITION_L, w);
+      delay(500);
+    } else {
+      delay(500);
+    }
+    iServo++;
+    if (iServo >= NUMSERVOS) iServo = 0;
+  }
+
+
+}
 
 #endif
 
