@@ -21,8 +21,8 @@
 //  If this is not defined, The included Controller should simply implement the InputController Class...
 //==================================================================================================================================
 
-//#define USECOMMANDER
-#define USERC100
+#define USECOMMANDER
+//#define USERC100
 
 
 #define DBGSerial         Serial
@@ -82,9 +82,21 @@
 #define XBeeSerial Serial2
 #define XBEE_BAUD        38400
 
+//[CM904 options]
+// Start off allowing up to two Port/Protocol/Baud combinations. 
+// Could in theory have 4, but for now just 2
+#define DXL_PORT_NAME					"3"
+#define DXL_PROTOCOL               		1                 	// See which protocol version is used in the Dynamixel
+#define DXL_BAUD						1000000				// Primary connection
+
+#define DXL2_PORT_NAME					nullptr				// use same port as primary
+#define DXL2_PROTOCOL                	2                 	// See which protocol version is used in the Dynamixel
+#define DXL2_BAUD						1000000				// Primary connection
+
+
 //--------------------------------------------------------------------
 //[Arbotix Pin Numbers]
-//#define SOUND_PIN    1 //0xff        // Tell system we have no IO pin...
+#define SOUND_PIN    0 //0xff        // Tell system we have no IO pin...
 #define USER 14                        // CM904.....
 
 // Define Analog pin and minimum voltage that we will allow the servos to run

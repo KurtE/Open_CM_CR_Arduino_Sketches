@@ -586,6 +586,7 @@ size_t ReadBytesUntil(uint32_t timeout, char terminator, char *buffer, size_t le
 {
   if (length < 1) return 0;
   size_t index = 0;
+
   while (index < length) {
     uint32_t start_time = millis();
     int c = -1;

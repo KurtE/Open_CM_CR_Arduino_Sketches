@@ -18,9 +18,17 @@
 #define NUMSERVOS (NUMSERVOSPERLEG*CNT_LEGS)
 #endif
 
+// Conversion factors for AX like servos 300 degrees (3000 in tenths) range 1024 Center 512 
 #define cPwmMult      128
 #define cPwmDiv       375
 #define cPFConst      512    // half of our 1024 range
+
+// Conversion factors for XL430 like servos 360 degrees (3600 in tenths) range 4096 Center 2048 
+#define cPwmMultXL      225
+#define cPwmDivXL       256
+#define cPFConstXL      2048    // half of our 1024 range
+
+
 
 // Some defines for Voltage processing
 #define VOLTAGE_MIN_TIME_UNTIL_NEXT_INTERPOLATE 4000  // Min time in us Until we should do next interpolation, as to not interfer.
@@ -38,7 +46,7 @@
 #ifdef DBGSerial
 //#define DEBUG
 // Only allow debug stuff to be turned on if we have a debug serial port to output to...
-//#define DEBUG_SERVOS
+#define DEBUG_SERVOS
 #endif
 
 #ifdef DEBUG_SERVOS
@@ -147,14 +155,15 @@ void ServoDriver::Init(void) {
   //  pinMode(0, OUTPUT);
   g_servos_torque_enabled = 0;
   g_servos_torque_errors = 0;
-  cm904.setup(1000000, NUMSERVOS);
+  cm904.setup(NUMSERVOS, DXL_PORT_NAME, DXL_PROTOCOL, DXL_BAUD);
+  cm904.addPortProtocol(DXL2_PORT_NAME, DXL2_PROTOCOL, DXL2_BAUD);
+
 
   cm904.poseSize = NUMSERVOS;
   #ifndef DEFAULT_FRAME_TIME_MS
   #define DEFAULT_FRAME_TIME_MS 10
   #endif
   cm904.frameLength = DEFAULT_FRAME_TIME_MS;
-#ifdef OPT_CHECK_SERVO_RESET
   uint16_t w;
   int     count_missing = 0;
   int     missing_servo = -1;
@@ -163,31 +172,23 @@ void ServoDriver::Init(void) {
   for (int i = 0; i < NUMSERVOS; i++) {
     // Set the id
     int servo_id = cPinTable[i];
-    cm904.setId(i, servo_id);
+
+    // This will 
+    if (!cm904.setId(i, servo_id)) {
+        // We have a failure
+#ifdef DBGSerial
+      DBGSerial.print("Servo(");
+      DBGSerial.print(i, DEC);
+      DBGSerial.print("): ");
+      DBGSerial.print(servo_id, DEC);
+      DBGSerial.println(" not found");
+#endif
+      if (++count_missing == 1)
+        missing_servo = servo_id;
+    }
 
     if (cPinTable[i] == 1)
       servo_1_in_table = true;
-
-    // Now try to get it's position
-    w = cm904.getServoWord(servo_id, AX_PRESENT_POSITION_L);
-    if (w == 0xffff) {
-      // Try a second time to make sure.
-      delay(25);
-      w = cm904.getServoWord(servo_id, AX_PRESENT_POSITION_L);
-      if (w == 0xffff) {
-        // We have a failure
-#ifdef DBGSerial
-        DBGSerial.print("Servo(");
-        DBGSerial.print(i, DEC);
-        DBGSerial.print("): ");
-        DBGSerial.print(servo_id, DEC);
-        DBGSerial.println(" not found");
-#endif
-        if (++count_missing == 1)
-          missing_servo = servo_id;
-      }
-    }
-    delay(25);
   }
 
   // Now see if we should try to recover from a potential servo that renumbered itself back to 1.
@@ -200,18 +201,17 @@ void ServoDriver::Init(void) {
 #endif
 
   if ((count_missing == 1) && !servo_1_in_table) {
-    if ((uint16_t)cm904.getServoWord(1, AX_PRESENT_POSITION_L) != (uint16_t)0xffff) {
+    uint8_t handler = cm904.findServo(1);  // See if we find servo 1
+    if (handler != 0xff) {
 #ifdef DBGSerial
       DBGSerial.print("Servo recovery: Servo 1 found - setting id to ");
       DBGSerial.println(missing_servo, DEC);
 #endif
-      cm904.setServoByte(1, AX_ID, missing_servo);
+      //cm904.setServoValue(cPinTable[g_iIdleServoNum], cm904Controller::REG_LED, g_iIdleLedState);
+      cm904.setServoByte(handler, 1, cm904Controller::REG_ID, missing_servo);
     }
   }
 
-#else
-  cm904.readPose();
-#endif
 #ifdef cVoltagePin
   for (byte i = 0; i < 8; i++)
     GetBatteryVoltage();  // init the voltage pin
@@ -226,7 +226,7 @@ void ServoDriver::Init(void) {
 #endif
 
   // Added - try to speed things up later if we do a query...
-  cm904.setRegOnAllServos(AX_RETURN_DELAY_TIME, 0);  // tell servos to give us back their info as quick as they can...
+  //cm904.setRegOnAllServos(AX_RETURN_DELAY_TIME, 0);  // tell servos to give us back their info as quick as they can...
 
 }
 
@@ -274,7 +274,7 @@ word ServoDriver::GetBatteryVoltage(void) {
   }
 
   // Lets cycle through the Tibia servos asking for voltages as they may be the ones doing the most work...
-  register word wVoltage = cm904.getServoByte (cPinTable[FIRSTTIBIAPIN + g_bLegVoltage], AX_PRESENT_VOLTAGE);
+  register word wVoltage = cm904.getServoValue (cPinTable[FIRSTTIBIAPIN + g_bLegVoltage], cm904Controller::REG_VOLTAGE);
   if (++g_bLegVoltage >= CNT_LEGS)
     g_bLegVoltage = 0;
   if (wVoltage != 0xffff) {
@@ -315,28 +315,13 @@ void ServoDriver::OutputServoInfoForLeg(byte LegIndex, short sCoxaAngle1, short 
 void ServoDriver::OutputServoInfoForLeg(byte LegIndex, short sCoxaAngle1, short sFemurAngle1, short sTibiaAngle1)
 #endif
 {
-  word    wCoxaSDV;        // Coxa value in servo driver units
-  word    wFemurSDV;        //
-  word    wTibiaSDV;        //
+  word wCoxaSDV = cm904.setNextPoseAngle(cPinTable[FIRSTCOXAPIN + LegIndex], sCoxaAngle1);
+  word wFemurSDV = cm904.setNextPoseAngle(cPinTable[FIRSTFEMURPIN + LegIndex], sFemurAngle1);
+  word wTibiaSDV = cm904.setNextPoseAngle(cPinTable[FIRSTTIBIAPIN + LegIndex], sTibiaAngle1);
 #ifdef c4DOF
-  word    wTarsSDV;        //
+  if ((byte)cTarsLength[LegIndex])   // We allow mix of 3 and 4 DOF legs...
+    wTarsSDV = cm904.setNextPoseAngle(cPinTable[FIRSTTARSPIN + LegIndex], sTarsAngle1);
 #endif
-  // The Main code now takes care of the inversion before calling.
-  wCoxaSDV = (((long)(sCoxaAngle1)) * cPwmMult) / cPwmDiv + cPFConst;
-  wFemurSDV = (((long)((long)(sFemurAngle1)) * cPwmMult) / cPwmDiv + cPFConst);
-  wTibiaSDV = (((long)(sTibiaAngle1)) * cPwmMult) / cPwmDiv + cPFConst;
-#ifdef c4DOF
-  wTarsSDV = (((long)(sTarsAngle1)) * cPwmMult) / cPwmDiv + cPFConst;
-#endif
-  if (ServosEnabled) {
-    cm904.setNextPose(cPinTable[FIRSTCOXAPIN + LegIndex], wCoxaSDV);
-    cm904.setNextPose(cPinTable[FIRSTFEMURPIN + LegIndex], wFemurSDV);
-    cm904.setNextPose(cPinTable[FIRSTTIBIAPIN + LegIndex], wTibiaSDV);
-#ifdef c4DOF
-    if ((byte)cTarsLength[LegIndex])   // We allow mix of 3 and 4 DOF legs...
-      cm904.setNextPose(cPinTable[FIRSTTARSPIN + LegIndex], wTarsSDV);
-#endif
-  }
 #ifdef DEBUG_SERVOS
   if (g_fDebugOutput) {
     DBGSerial.print(LegIndex, DEC);
@@ -370,13 +355,8 @@ void ServoDriver::OutputServoInfoForTurret(short sRotateAngle1, short sTiltAngle
   word    wRotateSDV;
   word    wTiltSDV;        //
 
-  // The Main code now takes care of the inversion before calling.
-  wRotateSDV = (((long)(sRotateAngle1)) * cPwmMult) / cPwmDiv + cPFConst;
-  wTiltSDV = (((long)((long)(sTiltAngle1)) * cPwmMult) / cPwmDiv + cPFConst);
-
-  if (ServosEnabled) {    cm904.setNextPose(cPinTable[FIRSTTURRETPIN], wRotateSDV);
-    cm904.setNextPose(cPinTable[FIRSTTURRETPIN + 1], wTiltSDV);
-  }
+  wRotateSDV = cm904.setNextPoseAngle(cPinTable[FIRSTTURRETPIN], sRotateAngle1);
+  wTiltSDV = cm904.setNextPoseAngle(cPinTable[FIRSTTURRETPIN + 1], sTiltAngle1);
 #ifdef DEBUG_SERVOS
   if (g_fDebugOutput) {
     DBGSerial.print("(");
@@ -423,12 +403,8 @@ void ServoDriver::FreeServos(void)
 {
   if (g_servos_torque_enabled) {  // Are there any servos that are active?
     g_InputController.AllowControllerInterrupts(false);    // If on xbee on hserial tell hserial to not processess...
-    cm904.setRegOnAllServos(AX_TORQUE_ENABLE, 0);  // do this as one statement...
-#if 0
-    for (byte i = 0; i < NUMSERVOS; i++) {
-      Relax(cPinTable[i]);
-    }
-#endif
+
+    cm904.setTorqueAllservos(false);  // do this as one statement...
     g_InputController.AllowControllerInterrupts(true);
     g_servos_torque_enabled = 0;
   }
@@ -449,7 +425,7 @@ void ServoDriver::IdleTime(void)
     g_iIdleServoNum = 0;
     g_iIdleLedState = 1 - g_iIdleLedState;
   }
-  cm904.setServoByte(cPinTable[g_iIdleServoNum], AX_LED, g_iIdleLedState);
+  cm904.setServoValue(cPinTable[g_iIdleServoNum], cm904Controller::REG_LED, g_iIdleLedState);
 
 }
 
@@ -469,7 +445,9 @@ void MakeSureServosAreOn(void)
     g_InputController.AllowControllerInterrupts(false);    // If on xbee on hserial tell hserial to not processess...
     cm904.readPose();
 
-//    cm904.setRegOnAllServos(AX_TORQUE_ENABLE, 1);  // Use sync write to do it.
+    cm904.setTorqueAllservos(true);  
+    g_servos_torque_enabled = 1;
+#if 0
     uint32_t servo_mask = 1;
     bool any_servos_updated = false;
     for (byte i = 0; i < NUMSERVOS; i++) {
@@ -496,11 +474,13 @@ void MakeSureServosAreOn(void)
       }
       servo_mask <<= 1;
     }
+#endif
     g_InputController.AllowControllerInterrupts(true);
-    if (any_servos_updated) {
+    //if (any_servos_updated) {
       delay(2); // give time for the servos to power up
-    }
-  }
+    //}
+  } 
+
 }
 
 //==============================================================================
@@ -575,14 +555,14 @@ boolean ServoDriver::ProcessTerminalCommand(byte *psz, byte bLen)
 #endif
 
     DBGSerial.print("From Servo 2: ");
-    DBGSerial.println(cm904.getServoByte (2, AX_PRESENT_VOLTAGE), DEC);
+    DBGSerial.println(cm904.getServoValue (2, cm904Controller::REG_VOLTAGE), DEC);
   }
 
   if ((bLen == 1) && ((*psz == 't') || (*psz == 'T'))) {
     // Test to see if all servos are responding...
     for (int i = 1; i <= NUMSERVOS; i++) {
       int iPos;
-      iPos = cm904.getServoWord(i, AX_PRESENT_POSITION_L);
+      iPos = cm904.getServoValue(i, cm904Controller::REG_PRESENT_POSITION);
       DBGSerial.print(i, DEC);
       DBGSerial.print("=");
       DBGSerial.println(iPos, DEC);
@@ -611,7 +591,7 @@ boolean ServoDriver::ProcessTerminalCommand(byte *psz, byte bLen)
     if (bFrame != 0) {
       DBGSerial.print("New Servo Cycles per second: ");
       DBGSerial.println(1000 / bFrame, DEC);
-      extern cm904Controller bioloid;
+      //extern cm904Controller bioloid;
       cm904.frameLength = bFrame;
     }
   }
@@ -639,14 +619,14 @@ void TCSetServoID(byte *psz)
     DBGSerial.print(wFrom, DEC);
     DBGSerial.print(" ");
     DBGSerial.print(wTo, DEC);
-    cm904.setServoByte(wFrom, AX_ID, wTo);
-/*    if (ax12ReadPacket(6)) { // get the response...
-      DBGSerial.print(" Resp: ");
-      DBGSerial.println(ax_rx_buffer[4], DEC);
+
+    uint8_t handler = cm904.findServo(wFrom);  // See if we find servo 1
+    if (handler != 0xff) {
+      cm904.setServoByte(handler, wFrom, cm904Controller::REG_ID, wTo);
+      DBGSerial.println();
+    } else {
+       DBGSerial.println(" Servo not found");
     }
-    else
-      DBGSerial.println(" failed");
-  */
   }
 }
 
@@ -667,14 +647,14 @@ void TCTrackServos()
     ;
 
   for (i = 0; i < NUMSERVOS; i++) {
-    auPos[i] = cm904.getServoWord(cPinTable[i], AX_PRESENT_POSITION_L);
+    auPos[i] = cm904.getServoValue(cPinTable[i], cm904Controller::REG_PRESENT_POSITION);
   }
 
   // Now loop until we get some input on the serial
   while (!DBGSerial.available()) {
     fChange = false;
     for (int i = 0; i < NUMSERVOS; i++) {
-      uPos = cm904.getServoWord(cPinTable[i], AX_PRESENT_POSITION_L);
+      uPos = cm904.getServoValue(cPinTable[i], cm904Controller::REG_PRESENT_POSITION);
       // Lets put in a littl delta or shows lots
       if (abs(auPos[i] - uPos) > 2) {
         auPos[i] = uPos;
@@ -686,7 +666,7 @@ void TCTrackServos()
         DBGSerial.print(": ");
         DBGSerial.print(uPos, DEC);
         // Convert back to angle.
-        int iAng = (((int)uPos - cPFConst) * cPwmDiv) / cPwmMult;
+        int iAng = cm904.convertPosToAngle(cPinTable[i], uPos);
         DBGSerial.print("(");
         DBGSerial.print(iAng, DEC);
         DBGSerial.print(")");
@@ -716,20 +696,20 @@ void TCWiggleServos()
     DBGSerial.print("(");
     DBGSerial.print(iServo, DEC);
     DBGSerial.print(") ");
-    uint16_t w = cm904.getServoWord(cPinTable[iServo], AX_PRESENT_POSITION_L);
+    uint16_t w = cm904.getServoValue(cPinTable[iServo], cm904Controller::REG_PRESENT_POSITION);
     DBGSerial.print(w, DEC);
     DBGSerial.print(" ");
-    uint8_t servo_enabled = cm904.getServoByte(cPinTable[iServo], AX_TORQUE_ENABLE);
+    uint8_t servo_enabled = cm904.getServoValue(cPinTable[iServo], cm904Controller::REG_TORQUE_ENABLE);
     DBGSerial.println(servo_enabled, DEC);
     if (w != 0xffff) {
 
-      cm904.setServoByte(cPinTable[iServo], AX_TORQUE_ENABLE, 1);  // Use sync write to do it.
+      cm904.setServoValue(cPinTable[g_iIdleServoNum], cm904Controller::REG_TORQUE_ENABLE, 1);
 
-      cm904.setServoWord(cPinTable[iServo], AX_GOAL_POSITION_L, w-50);
+      cm904.setServoValue(cPinTable[g_iIdleServoNum], cm904Controller::REG_GOAL_POSITION, w-50);
       delay(500);
-      cm904.setServoWord(cPinTable[iServo], AX_GOAL_POSITION_L, w+50);
+      cm904.setServoValue(cPinTable[g_iIdleServoNum], cm904Controller::REG_GOAL_POSITION, w+50);
       delay(500);
-      cm904.setServoWord(cPinTable[iServo], AX_GOAL_POSITION_L, w);
+      cm904.setServoValue(cPinTable[g_iIdleServoNum], cm904Controller::REG_GOAL_POSITION, w);
       delay(500);
     } else {
       delay(500);
