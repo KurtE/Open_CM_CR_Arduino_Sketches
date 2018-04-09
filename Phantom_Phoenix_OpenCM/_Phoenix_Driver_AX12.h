@@ -164,7 +164,7 @@ void ServoDriver::Init(void) {
   #define DEFAULT_FRAME_TIME_MS 10
   #endif
   cm904.frameLength = DEFAULT_FRAME_TIME_MS;
-  uint16_t w;
+//  uint16_t w;
   int     count_missing = 0;
   int     missing_servo = -1;
   bool    servo_1_in_table = false;
