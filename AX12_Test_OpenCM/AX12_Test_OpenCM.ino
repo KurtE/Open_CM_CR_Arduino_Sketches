@@ -14,7 +14,7 @@
 //=============================================================================
 // Options...
 //=============================================================================
-#if defined(__OPENCR__)
+#if defined(__OPENCR__) || defined(__OPENCM904__)
 uint8_t port_handler_numbers[] = {1, 3};    // Setup to handle both ports of openCR
 #endif
 #if defined(TEENSYDUINO) 
