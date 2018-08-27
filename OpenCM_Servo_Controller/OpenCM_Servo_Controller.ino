@@ -39,21 +39,11 @@ void setup() {
 }
 
 void loop() {
-  // See if any data available from port actually the read takes care of MAX size plus empty
-  int cb_port_avail = portHandler->readPort(from_port_buffer, BUFFER_SIZE);
-  if (cb_port_avail) {
-    // May want to see if we can write that many bytes without blocking...
-    Serial.write(from_port_buffer, cb_port_avail);
-  }
-  int cb_usb_avail = 0;
-  if (Serial.available()) {
-    digitalWrite(BOARD_LED_PIN, !digitalRead(BOARD_LED_PIN));
-    while (Serial.available() && (cb_usb_avail < BUFFER_SIZE)) {
-      from_usb_buffer[cb_usb_avail++] = Serial.read();
-      // Note: we will later look at data to see if it is a packet for us
-    }
-    portHandler->writePort(from_usb_buffer, cb_usb_avail);
-  }
+  // Check and process any data coming from the portHandler
+  ProcessPortInputData(portHandler);
+
+  // Then process any data coming from the USB
+  ProcessUSBInputData();
 }
 
 // Fatal error - show blink pattern of error number...
@@ -68,4 +58,30 @@ void signal_abort(uint8_t error) {
     delay(500);
   }
 }
+
+// Process any data that comes from the Port and forward to USB
+void ProcessPortInputData(dynamixel::PortHandler *portHandler) {
+  // See if any data available from port actually the read takes care of MAX size plus empty
+  int cb_port_avail = portHandler->readPort(from_port_buffer, BUFFER_SIZE);
+  if (cb_port_avail) {
+    // May want to see if we can write that many bytes without blocking...
+    Serial.write(from_port_buffer, cb_port_avail);
+  }
+}
+
+//=========================================================================
+// Process USB input data... 
+//=========================================================================
+void ProcessUSBInputData() {
+  int cb_usb_avail = 0;
+  if (Serial.available()) {
+    digitalWrite(BOARD_LED_PIN, !digitalRead(BOARD_LED_PIN));
+    while (Serial.available() && (cb_usb_avail < BUFFER_SIZE)) {
+      from_usb_buffer[cb_usb_avail++] = Serial.read();
+      // Note: we will later look at data to see if it is a packet for us
+    }
+    portHandler->writePort(from_usb_buffer, cb_usb_avail);
+  }
+}
+
 
