@@ -1,3 +1,5 @@
+#include <DynamixelSDK.h>
+
 
 //====================================================================================================
 // Kurts Test program to try out different ways to manipulate the AX12 servos on the PhantomX
@@ -8,19 +10,31 @@
 //============================================================================
 // Global Include files
 //=============================================================================
-#include <DynamixelSDK.h>
 
 //=============================================================================
 // Options...
 //=============================================================================
-
+#if defined(__OPENCR__) || defined(__OPENCM904__)
+uint8_t port_handler_numbers[] = {1, 3};    // Setup to handle both ports of openCR
+#endif
+#if defined(TEENSYDUINO) 
+uint8_t port_handler_numbers[] = {1};     // Default to Serial1
+#if defined(__MK66FX1M0__)
+// Try with the T3.6 board
+#define SERVOBUS Serial1
+#define SERVO_RX_PIN           27
+#define SERVO_TX_PIN           26       
+#define SERVO_DIRECTION_PIN 28
+#define SERVO_POWER_ENABLE_PIN  29
+#else
+#define SERVO_POWER_ENABLE_PIN 2
+#endif
+#endif
+#define COUNT_PORTHANDLERS  sizeof(port_handler_numbers)
 // Uncomment the next line if building for a Quad instead of a Hexapod.
 //#define QUAD_MODE
 //#define TURRET
-#define DEBUG_IO_PINS
-
-//#define DEFAULT_PORTHANDLER 1
-#define DEFAULT_PORTHANDLER 3
+//#define DEBUG_IO_PINS
 
 //#define VOLTAGE_ANALOG_PIN 0
 //#define SOUND_PIN 1
@@ -32,6 +46,7 @@
 
 // Protocol version
 #define PROTOCOL_VERSION                1.0                 // See which protocol version is used in the Dynamixel
+#define PROTOCOL_VERSION2                2.0                 // See which protocol version is used in the Dynamixel
 #define DEVICENAME                      "3"                 // Check which port is being used on your controller
 #define DXL_BAUDRATE 1000000
 
@@ -156,6 +171,72 @@ const char* IKPinsNames[] = {
 #define AX_LOCK                     47
 #define AX_PUNCH_L                  48
 #define AX_PUNCH_H                  49
+//=============================================================
+// Defines for X series (XL430)
+//=============================================================================
+#define DXL_PING                    1
+#define DXL_READ_DATA               2
+#define DXL_WRITE_DATA              3
+#define DXL_REG_WRITE               4
+#define DXL_ACTION                  5
+#define DXL_RESET                   6
+#define DXL_SYNC_READ               0x82
+#define DXL_SYNC_WRITE              0x83
+
+
+/** EEPROM AREA **/
+#define DXL_X_MODEL_NUMBER         0 //2 1060(xl430-250)
+#define DXL_X_MODEL_INFORMATION    2 //4
+#define DXL_X_VERSION              6
+#define DXL_X_ID                   7   // 1 1
+#define DXL_X_BAUD_RATE            8   // 1 1
+#define DXL_X_RETURN_DELAY_TIME    9   // 1 250
+#define DXL_X_DRIVE_MODE           10  // 1 0
+#define DXL_X_OPERATING_MODE       11  // 1 3
+#define DXL_X_SECONDARY_ID         12  // 1 255
+#define DXL_X_PROTOCOL_VERSION     13  // 1 - 2
+#define DXL_X_HOMING_OFFSET        20  // 4 - 0
+#define DXL_X_MOVING_THRESHOLD     24  // 4 - 10
+#define DXL_X_TEMPERATURE_LIMIT    31  //1 - 72
+#define DXL_X_MAX_VOLTAGE_LIMIT    32  // 2 140
+#define DXL_X_MIN_VOLTAGE_LIMIT    34  // 2 60
+#define DXL_X_PWM_LIMIT            36  // 2 885
+#define DXL_X_ACCELERATION_LIMIT   40  // 4 32767
+#define DXL_X_VElOCITY_LIMIT       44  // 4 415
+#define DXL_X_MAX_POSITION_LIMIT   48  // 4 4095
+#define DXL_X_MIN_POSITION_LIMIT   52  // 4 0
+#define DXL_X_SHUTDOWN             63  // 1 52
+
+/** RAM AREA **/
+#define DXL_X_TORQUE_ENABLE        64  // 1 0
+#define DXL_X_LED                  65  // 1 0
+#define DXL_X_STATUS_RETURN_LEVEL  68  // 1 2
+#define DXL_X_REGISTERED_INSTRUCTION 69 //1 (R)
+#define DXL_X_HARDWARE_ERROR_STATUS  70 // 1 (R)
+#define DXL_X_VELOCITY_I_GAIN      76  // 2 1000 
+#define DXL_X_VELOCITY_P_GAIN      78  // 2 100 
+#define DXL_X_POSITION_D_GAIN      80  // 2 4000 
+#define DXL_X_POSITION_I_GAIN      82  // 2 0
+#define DXL_X_POSITION_P_GAIN      84  // 2 640
+#define DXL_X_FEEDFORWARD_2_GAIN   88  // 2 0
+#define DXL_X_FEEDFORWARD_1_GAIN   90  // 2 0
+#define DXL_X_BUS_WATCHDOG         98  // 1 -
+#define DXL_X_GOAL_PWM             100 // 2 
+#define DXL_X_GOAL_VELOCITY        104 // 4
+#define DXL_X_PROFILE_ACCELERATION 108 // 4
+#define DXL_X_PROFILE_VELOCITY     112 // 4
+#define DXL_X_GOAL_POSITION        116 // 4
+#define DXL_X_REALTIME_TICK        120 // 2 (R)
+#define DXL_X_MOVING               122 // 1 (R)
+#define DXL_X_MOVING_STATUS        123 // 1 (R)
+#define DXL_X_PRESENT_PWN          124 // 2 (R)
+#define DXL_X_PRESENT_LOAD         126 // 2 (R)
+#define DXL_X_PRESENT_VELOCITY     128 // 4 (R)
+#define DXL_X_PRESENT_POSITION     132 // 4 (R)
+#define DXL_X_VELOCITY_TRAJECTORY  136 // 4 (R)
+#define DXL_X_POSITION_TRAJECTORY  140 // 4 (R)
+#define DXL_X_PRESENT_INPUT_VOLTAGE  144 // 2 (R)
+#define DXL_X_PRESENT_TEMPERATURE  146 // 1 (R)
 
 
 
@@ -164,22 +245,36 @@ const char* IKPinsNames[] = {
 //=============================================================================
 // Global objects
 // Handle to port handler and packet handler;
-dynamixel::PortHandler *portHandler1;
-dynamixel::PortHandler *portHandler3;
-dynamixel::PortHandler *portHandler;
+dynamixel::PortHandler *portHandlers[COUNT_PORTHANDLERS];
 
-dynamixel::PacketHandler *packetHandler;
+dynamixel::PacketHandler *packetHandler1;
+dynamixel::PacketHandler *packetHandler2;
 
 word           g_wVoltage;
+uint8_t        g_servo_index_voltage = 0;
 char           g_aszCmdLine[80];
 uint8_t        g_iszCmdLine;
 boolean        g_fTrackServos = false;
+
+// g_servo_protocol
+typedef union {
+  struct {
+    uint8_t protocol:2; // define which protocol to use
+    uint8_t port:6;     // Define which port it is on
+  }b;
+  uint8_t val;
+} SERVO_PROT_PORT_t;
+
+enum           {SERVO_NOT_FOUND = 0, SERVO_PROTOCOL1 = 1, SERVO_PROTOCOL2};
+
+SERVO_PROT_PORT_t        g_servo_protocol[255] = {SERVO_NOT_FOUND};  // What type of servos do we have????
+
+uint8_t        g_count_servos_found = 0;
 
 // Values to use for servo position...
 byte          g_bServoID;
 word          g_wServoGoalPos;
 word          g_wServoGoalSpeed;
-
 //====================================================================================================
 // Setup
 //====================================================================================================
@@ -188,43 +283,52 @@ void setup() {
   while (!Serial && (millis() < 3000)) ;  // Give time for Teensy and other USB arduinos to create serial port
   Serial.begin(38400);  // start off the serial port.
   Serial.println("\nCM9.04 Servo Test program");
-  
-  // Initialize PortHandler instance
-  // Set the port path
-  // Get methods and members of PortHandlerLinux or PortHandlerWindows
-  portHandler1 = dynamixel::PortHandler::getPortHandler("1");
-  portHandler3 = dynamixel::PortHandler::getPortHandler("3");
-  #if (DEFAULT_PORTHANDLER == 1)
-  portHandler = portHandler1;
-  Serial.println("Default PortHandler Servos on Serial1 (on the CM904)");
-  #else
-  portHandler = portHandler3;
-  Serial.println("Default PortHandler Servos on Serial3 (on 485 expansion Board)");
-  #endif
-    
+
+#if defined(SERVO_RX_PIN)
+  SERVOBUS.setRX(SERVO_RX_PIN);
+#endif
+#if defined(SERVO_TX_PIN)
+  SERVOBUS.setTX(SERVO_TX_PIN);
+#endif
+
+#ifdef SERVO_POWER_ENABLE_PIN
+  pinMode(SERVO_POWER_ENABLE_PIN, OUTPUT);
+  digitalWrite(SERVO_POWER_ENABLE_PIN, HIGH);
+#endif
+  pinMode(4, OUTPUT); 
+
   // Initialize PacketHandler instance
+  packetHandler1 = dynamixel::PacketHandler::getPacketHandler(PROTOCOL_VERSION);
+  packetHandler2 = dynamixel::PacketHandler::getPacketHandler(PROTOCOL_VERSION2);
+  // Open port
+
   // Set the protocol version
   // Get methods and members of Protocol1PacketHandler or Protocol2PacketHandler
-  packetHandler = dynamixel::PacketHandler::getPacketHandler(PROTOCOL_VERSION);
-  // Open port
-  // Lets init the two different port handlers. 
-  if (!portHandler1->openPort()) {
-    Serial.print("Failed to open port 1 the Dynamixel port!\n");
-  }
-  if (!portHandler1->setBaudRate(DXL_BAUDRATE)) {
-    Serial.print("Failed to change the Port 1 Dynamixel baudrate!\n");
-  }
-  if (!portHandler3->openPort()) {
-    Serial.print("Failed to open port 3 the Dynamixel port!\n");
-  }
-  if (!portHandler3->setBaudRate(DXL_BAUDRATE)) {
-    Serial.print("Failed to change the Port 3 Dynamixel baudrate!\n");
-  }
-  delay(250);
+  // Initialize PortHandler instances
+  
+  char port_string[5];
+  for (uint8_t i = 0; i < COUNT_PORTHANDLERS; i++) {
+    itoa(port_handler_numbers[i], port_string, sizeof(port_string));
+    portHandlers[i] = dynamixel::PortHandler::getPortHandler(port_string);
 
+    // Lets init the two different port handlers. 
+#if defined(SERVO_DIRECTION_PIN)  
+    portHandlers[i]->setTXEnablePin(SERVO_DIRECTION_PIN);
+#endif    
+    if (!portHandlers[i]->openPort()) {
+      Serial.print("Failed to open port 1 the Dynamixel port: ");
+      Serial.println(port_string);
+    }
+    if (!portHandlers[i]->setBaudRate(DXL_BAUDRATE)) {
+      Serial.print("Failed to change the Port 1 Dynamixel baudrate: ");
+      Serial.println(port_string);
+    }
+  }
   delay(1000);
-  Serial.print("System Voltage in 10ths: ");
-  Serial.println(g_wVoltage = getServoVoltage(LF_COXA), DEC);
+  // Lets start of trying to locate all servos.
+  FindServos();
+
+  PrintServoVoltage();
 
 }
 
@@ -234,13 +338,7 @@ void setup() {
 //====================================================================================================
 void loop() {
   // Output a prompt
-
-  word wNewVoltage = getServoVoltage(LF_COXA);
-  if (wNewVoltage != g_wVoltage) {
-    g_wVoltage = wNewVoltage;
-    Serial.print("System Voltage in 10ths: ");
-    Serial.println(g_wVoltage, DEC);
-  }
+  PrintServoVoltage();
 
   // lets toss any charcters that are in the input queue
   while (Serial.read() != -1)
@@ -255,10 +353,12 @@ void loop() {
   Serial.println("6 - Set Servo return delay time");
   Serial.println("8 - Set ID: <old> <new>");
   Serial.println("9 - Print Servo Values");
+  Serial.println("b - Baud <new baud>");
   Serial.println("t - Toggle track Servos");
   Serial.println("h - hold [<sn>]");
   Serial.println("f - free [<sn>]");
-  Serial.println("s - switch Serial Bus");
+  Serial.println("w - write <servo> <reg> <val> (<val2>...)\n\r");
+
   Serial.print(":");
   Serial.flush();  // make sure the complete set of prompts has been output...
   // Get a command
@@ -294,6 +394,10 @@ void loop() {
       case '9':
         PrintServoValues();
         break;
+      case 'b':
+      case 'B':
+        SetBaudRate();
+        break;
       case 'f':
       case 'F':
         HoldOrFreeServos(0);
@@ -301,10 +405,6 @@ void loop() {
       case 'h':
       case 'H':
         HoldOrFreeServos(1);
-        break;
-      case 's':
-      case 'S':
-        SwitchPortHandler();
         break;
       case 't':
       case 'T':
@@ -317,12 +417,50 @@ void loop() {
           Serial.println("Tracking Off");
         TrackPrintMinsMaxs();
         break;
+      case 'w':
+      case 'W':
+        WriteServoValues();
+        break;
     }
   }
 }
 
+//====================================================================================================
+void PrintServoVoltage() {
+  // Lets try reading in the current voltage for the next servo we found...
+  if (g_count_servos_found == 0) return; // no servos found
+  Serial.println("PrintServo Voltage called");
+  g_servo_index_voltage++;    // will wrap around...
+  uint8_t sanity_test_count = 0;
+  while (!g_servo_protocol[g_servo_index_voltage].val) {
+    g_servo_index_voltage++;
+    if (g_servo_index_voltage >= 254) g_servo_index_voltage = 0;
+    sanity_test_count--;
+    if (sanity_test_count == 0) {
+      Serial.println("PSV Sanity Test fail");
+      return;
+    }
+  }
+  uint16_t wNewVoltage;
+  dynamixel::PortHandler *portHandler = portHandlers[g_servo_protocol[g_servo_index_voltage].b.port];
+  if (g_servo_protocol[g_servo_index_voltage].b.protocol == SERVO_PROTOCOL1) {
+    uint8_t bVoltage; 
+    packetHandler1->read1ByteTxRx(portHandler, g_servo_index_voltage, AX_PRESENT_VOLTAGE, &bVoltage);
+    wNewVoltage = bVoltage;
+  } else {
+    packetHandler2->read2ByteTxRx(portHandler, g_servo_index_voltage, DXL_X_PRESENT_INPUT_VOLTAGE, &wNewVoltage);
+  }
+  if (wNewVoltage != g_wVoltage) {
+    g_wVoltage = wNewVoltage;
+    Serial.print("Servo: ");
+    Serial.print(g_servo_index_voltage, DEC);
+    Serial.print(" Voltage in 10ths: ");
+    Serial.println(g_wVoltage, DEC);
+  }
+}
 
 
+//====================================================================================================
 // Helper function to read in a command line
 uint8_t GetCommandLine(void) {
   int ch;
@@ -360,12 +498,14 @@ boolean FGetNextCmdNum(word * pw ) {
   return true;
 }
 
+
 //=======================================================================================
 void AllServosOff(void) {
-  for (int i = 0; i < NUM_SERVOS; i++) {
-    packetHandler->write1ByteTxRx(portHandler, pgm_axdIDs[i], AX_TORQUE_ENABLE, 0x0);
+  // Quick and dirty way to do it by broadcast...
+  for (uint8_t i=0; i < COUNT_PORTHANDLERS; i++) {
+    packetHandler1->write1ByteTxRx(portHandlers[i], 0xfe, AX_TORQUE_ENABLE, 0x0);
+    packetHandler2->write1ByteTxRx(portHandlers[i], 0xfe, DXL_X_TORQUE_ENABLE, 0x0);
   }
-
 }
 
 //=======================================================================================
@@ -389,6 +529,7 @@ bool ReportAnyErrors(const char *psz, uint8_t servo_id, int retval, uint8_t erro
   Serial.print(",");
   Serial.print(error, HEX);
   Serial.print(") ");  
+  return true;
 }
 
 //=======================================================================================
@@ -397,29 +538,52 @@ void AllServosCenter(void) {
   uint8_t error;
   int retval;
   // First make sure all of the motors are turned on. 
-  for (int i = 0; i < NUM_SERVOS; i++) {
-    retval = packetHandler->write1ByteTxRx(portHandler, pgm_axdIDs[i], AX_TORQUE_ENABLE, 0x1, &error);
-    any_errors |= ReportAnyErrors("TQ ON", pgm_axdIDs[i], retval, error);
+  for (int i = 0; i < 255; i++) {
+    dynamixel::PortHandler *portHandler = portHandlers[g_servo_protocol[i].b.port];
+
+    if (g_servo_protocol[i].b.protocol == SERVO_PROTOCOL1) {
+      // See if this turns the motor off and I can turn it back on...
+      retval = packetHandler1->write1ByteTxRx(portHandler, i, AX_TORQUE_ENABLE, 0x1, &error);
+      any_errors |= ReportAnyErrors("TQ ON", i, retval, error);
+      retval = packetHandler1->write2ByteTxRx(portHandler, i, AX_GOAL_POSITION_L, 0x1ff, &error);
+      any_errors |= ReportAnyErrors("Goal", i, retval, error);
+    } else if (g_servo_protocol[i].b.protocol == SERVO_PROTOCOL2) {
+      retval = packetHandler2->write1ByteTxRx(portHandler, i, DXL_X_TORQUE_ENABLE, 0x1, &error);
+      any_errors |= ReportAnyErrors("TQ ON", i, retval, error);
+      retval = packetHandler2->write4ByteTxRx(portHandler, i, DXL_X_GOAL_POSITION, 2047, &error);
+      any_errors |= ReportAnyErrors("Goal", i, retval, error);
+    }
   }
-  delay(2); // give servo some time to handle torque on...
-  for (int i = 0; i < NUM_SERVOS; i++) {
-    retval = packetHandler->write2ByteTxRx(portHandler, pgm_axdIDs[i], AX_GOAL_POSITION_L, 0x1ff, &error);
-    any_errors |= ReportAnyErrors("Goal", pgm_axdIDs[i], retval, error);
-  }
+
   if (any_errors) Serial.println();
 }
+
+
 //=======================================================================================
 void HoldOrFreeServos(byte fHold) {
   word iServo;
-
   if (!FGetNextCmdNum(&iServo)) {
-    // All servos...
-    for (int i = 0; i < NUM_SERVOS; i++) {
-      packetHandler->write1ByteTxRx(portHandler, pgm_axdIDs[i], AX_TORQUE_ENABLE, fHold);
+    for (int i = 0; i < 255; i++) {
+      dynamixel::PortHandler *portHandler = portHandlers[g_servo_protocol[i].b.port];
+      if (g_servo_protocol[i].b.protocol == SERVO_PROTOCOL1) {
+        // See if this turns the motor off and I can turn it back on...
+        packetHandler1->write1ByteTxRx(portHandler, i, AX_TORQUE_ENABLE, fHold);
+      } else if (g_servo_protocol[i].b.protocol == SERVO_PROTOCOL2) {
+        packetHandler2->write1ByteTxRx(portHandler, i, DXL_X_TORQUE_ENABLE, fHold);
+      }
     }
   }
   else {
-    packetHandler->write1ByteTxRx(portHandler, iServo, AX_TORQUE_ENABLE, fHold);
+    if (IsValidServo(iServo)) {
+      dynamixel::PortHandler *portHandler = portHandlers[g_servo_protocol[iServo].b.port];
+      if (g_servo_protocol[iServo].b.protocol == SERVO_PROTOCOL1) {
+        // See if this turns the motor off and I can turn it back on...
+        packetHandler1->write1ByteTxRx(portHandler, iServo, AX_TORQUE_ENABLE, fHold);
+      } else if (g_servo_protocol[iServo].b.protocol == SERVO_PROTOCOL2) {
+        packetHandler2->write1ByteTxRx(portHandler, iServo, DXL_X_TORQUE_ENABLE, fHold);
+      }
+
+    }
   }
 }
 
@@ -429,6 +593,7 @@ void HoldOrFreeServos(byte fHold) {
 void SetServoPosition(void) {
   word w1;
   word w2;
+  dynamixel::PortHandler *portHandler;
 
   if (!FGetNextCmdNum(&w1))
     return;    // no parameters so bail.
@@ -436,24 +601,72 @@ void SetServoPosition(void) {
   Serial.println("Set Servo Position");
   if (FGetNextCmdNum(&w2)) {  // We have at least 2 parameters
     g_bServoID = w1;    // So first is which servo
+
+    if (!IsValidServo(g_bServoID)) {
+      Serial.println("Servo not found");
+      return;
+    }
+
+    portHandler = portHandlers[g_servo_protocol[g_bServoID].b.port];
     g_wServoGoalPos = w2;
     if (FGetNextCmdNum(&w2)) {  // We have at least 3 parameters
       g_wServoGoalSpeed = w2;
-      packetHandler->write2ByteTxRx(portHandler, g_bServoID, AX_GOAL_SPEED_L, g_wServoGoalSpeed);
+      if (g_servo_protocol[g_bServoID].b.protocol == SERVO_PROTOCOL1) {
+        packetHandler1->write2ByteTxRx(portHandler, g_bServoID, AX_GOAL_SPEED_L, g_wServoGoalSpeed);
+      } else {
+        packetHandler2->write4ByteTxRx(portHandler, g_bServoID, DXL_X_GOAL_VELOCITY, g_wServoGoalSpeed);
+      }
       Serial.print("Goal Speed: ");
       Serial.print(g_wServoGoalSpeed, DEC);
     }
   }
-  else
+  else {
+    if (!IsValidServo(g_bServoID)) {
+      Serial.println("Servo not found");
+      return;
+    }
+
+    portHandler = portHandlers[g_servo_protocol[g_bServoID].b.port];
     g_wServoGoalPos = w1;  // Only 1 paramter so assume it is the new position
+  }
 
   // Now lets try moving that servo there
-  packetHandler->write2ByteTxRx(portHandler, g_bServoID, AX_GOAL_POSITION_L, g_wServoGoalPos);
+  if (g_servo_protocol[g_bServoID].b.protocol == SERVO_PROTOCOL1) {
+    packetHandler1->write2ByteTxRx(portHandler, g_bServoID, AX_GOAL_POSITION_L, g_wServoGoalPos);
+  } else {
+    packetHandler2->write4ByteTxRx(portHandler, g_bServoID,  DXL_X_GOAL_POSITION, g_wServoGoalPos);
+  }  
   Serial.print(" ID: ");
   Serial.print(g_bServoID, DEC);
   Serial.print(" ");
   Serial.println(g_wServoGoalPos, DEC);
+
 }
+
+//=======================================================================================
+bool IsValidServo(uint8_t servo_id) {
+  if (g_servo_protocol[servo_id].val)
+    return true;  // was found before.
+
+  // First lets try Protocol1 ping
+  for (uint8_t i = 0; i < COUNT_PORTHANDLERS; i++) {
+    //Serial.printf("IsValidServo: %d Need to ping\n", servo_id);
+    if (packetHandler1->ping(portHandlers[i], servo_id) == COMM_SUCCESS) {
+      g_servo_protocol[servo_id].b.protocol = SERVO_PROTOCOL1;
+      g_servo_protocol[servo_id].b.port = i;
+      g_count_servos_found++;
+      return true;
+    }
+    if (packetHandler2->ping(portHandlers[i], servo_id) == COMM_SUCCESS) {
+      g_servo_protocol[servo_id].b.protocol = SERVO_PROTOCOL2;
+      g_servo_protocol[servo_id].b.port = i;
+      g_count_servos_found++;
+      return true;
+    }
+  }
+  return false;
+}
+
 
 //=======================================================================================
 void SetServoReturnDelayTime(void) {
@@ -471,8 +684,23 @@ void SetServoReturnDelayTime(void) {
   Serial.print(" return delay time: ");
   Serial.println(w2, DEC);
 
-  // Now lets try moving that servo there
-  packetHandler->write1ByteTxRx(portHandler, w1, AX_RETURN_DELAY_TIME, w2);
+  if (!IsValidServo(w1)) {
+    Serial.print("Servo: ");
+    Serial.print(w1, DEC);
+    Serial.println("Was not found");
+    return;
+  }
+
+  // Now lets update that servo
+  int retval;
+  uint8_t error;
+  dynamixel::PortHandler *portHandler = portHandlers[g_servo_protocol[w1].b.port];
+  if (g_servo_protocol[w1].b.protocol == SERVO_PROTOCOL1) {
+    retval = packetHandler1->write1ByteTxRx(portHandler, w1, AX_RETURN_DELAY_TIME, w2, &error);
+  } else {
+    retval = packetHandler2->write1ByteTxRx(portHandler, w1, DXL_X_RETURN_DELAY_TIME, w2, &error);
+  }
+  ReportAnyErrors("Set return delay", w1, retval, error);
 }
 
 
@@ -493,8 +721,15 @@ void SetServoID(void) {
   Serial.print(" To: ");
   Serial.println(w2, DEC);
 
-  // Now lets try moving that servo there
-  packetHandler->write1ByteTxRx(portHandler, w1, AX_ID, w2);
+  int retval;
+  uint8_t error;
+  dynamixel::PortHandler *portHandler = portHandlers[g_servo_protocol[w1].b.port];
+  if (g_servo_protocol[w1].b.protocol == SERVO_PROTOCOL1) {
+    retval = packetHandler1->write1ByteTxRx(portHandler, w1, AX_ID, w2, &error);
+  } else {
+    retval = packetHandler2->write1ByteTxRx(portHandler, w1, DXL_X_ID, w2, &error);
+  }
+  ReportAnyErrors("Set ID", w1, retval, error);
 }
 
 
@@ -504,112 +739,159 @@ void GetServoPositions(void) {
   unsigned long ulBefore;
   unsigned long ulDelta;
   uint16_t w;
+  uint32_t pos;
   uint8_t err;
-  for (int i = 0; i < NUM_SERVOS; i++) {
-    Serial.print((byte)pgm_axdIDs[i], DEC);
+  int retval;
+
+
+  if (!g_count_servos_found) {
+    Serial.println("Previous Find Servos failed to locate any servos: so retry");
+    FindServos();
+    return;
+  }
+
+  for (int i = 0; i < 255; i++) {
+    if (!g_servo_protocol[i].val) continue;  // No servo found on that index
+    dynamixel::PortHandler *portHandler = portHandlers[g_servo_protocol[i].b.port];
+    Serial.print(i, DEC);
     Serial.print(":");
     ulBefore = micros();
-    if (packetHandler->read2ByteTxRx(portHandler, pgm_axdIDs[i], AX_PRESENT_POSITION_L, &w, &err) == COMM_SUCCESS) {
+    uint8_t delay_time_reg;
+    if (g_servo_protocol[i].b.protocol == SERVO_PROTOCOL1) {
+      retval = packetHandler1->read2ByteTxRx(portHandler, i, AX_PRESENT_POSITION_L, &w, &err);
+      delay_time_reg = AX_RETURN_DELAY_TIME;
+      pos = w;
+    } else {
+      retval = packetHandler2->read4ByteTxRx(portHandler, i, DXL_X_PRESENT_POSITION, &pos, &err);
+      delay_time_reg = DXL_X_RETURN_DELAY_TIME;
+    }
+    if (!ReportAnyErrors("Current Pos", i, retval, err)) {
       ulDelta = micros() - ulBefore;
-      Serial.print(w, DEC);
+      Serial.print(pos, DEC);
       Serial.print(" ");
       Serial.print(ulDelta, DEC);
       Serial.print(" ");
-      Serial.println(getServoByte(pgm_axdIDs[i], AX_RETURN_DELAY_TIME), DEC);
+      Serial.println(getServoByte(i, delay_time_reg), DEC);
     } else {
       ulDelta = micros() - ulBefore;
       Serial.print("** Failed(" );
       Serial.print(err, DEC);
-      Serial.print(") ** " );
-      Serial.print(ulDelta, DEC);
-      Serial.print(" ");
-      Serial.print(getServoByte(pgm_axdIDs[i], AX_RETURN_DELAY_TIME), DEC);
-      Serial.print("   Retry: ");
-      if (packetHandler->read2ByteTxRx(portHandler, pgm_axdIDs[i], AX_PRESENT_POSITION_L, &w) == COMM_SUCCESS) {
-        Serial.println(w, DEC);
-      } else {
-        Serial.println("** Failed **" );
-      }
+      Serial.println(")" );
     }
-    delay (100);
   }
 }
 
 //=======================================================================================
+
 void FindServos(void) {
 
+  g_count_servos_found = 0;
   uint16_t w;
-  if (portHandler == portHandler1)
-    Serial.println("Begin default Serial1: ");
-  else  
-    Serial.println("Begin default Serial3: ");
-  for (int i = 0; i < 254; i++) {
-    if (packetHandler->read2ByteTxRx(portHandler, i, AX_PRESENT_POSITION_L, &w) == COMM_SUCCESS) {
-      Serial.print(i, DEC);
-      Serial.print(" - ");
-      Serial.println(w, DEC);
-    }
-    //delay (1);
-  }
-  Serial.println("Done");
+  Serial.println("\nSearch for all servos");
 
-  // Check other 
-  dynamixel::PortHandler *other_portHandler;
-  if (portHandler == portHandler1) {
-    Serial.println("\nCheck for one on other (Serial3): ");
-    other_portHandler = portHandler3;
-  } else {  
-    Serial.println("\nCheck for one on other (Serial1): ");
-    other_portHandler = portHandler1;
-  }  
-  for (int i = 0; i < 254; i++) {
-    if (packetHandler->read2ByteTxRx(other_portHandler, i, AX_PRESENT_POSITION_L, &w) == COMM_SUCCESS) {
-      Serial.print(i, DEC);
-      Serial.print(" - ");
-      Serial.println(w, DEC);
+  // Initialize to no servos...
+  for (int i = 0; i < 254; i++) 
+      g_servo_protocol[i].val = SERVO_NOT_FOUND;
+
+  for (uint8_t port_index = 0; port_index < COUNT_PORTHANDLERS; port_index++) {
+    dynamixel::PortHandler *portHandler = portHandlers[port_index];
+    Serial.print("Begin Searching on Port: ");
+    Serial.println(port_handler_numbers[port_index], DEC);
+
+    Serial.println("  Begin Protocol 1: ");
+    for (int i = 0; i < 254; i++) {
+      if (packetHandler1->read2ByteTxRx(portHandler, i, AX_PRESENT_POSITION_L, &w) == COMM_SUCCESS) {
+        if (g_servo_protocol[i].val) {
+          Serial.println("Multiple servos found with same ID");
+        } else {
+          g_count_servos_found++;
+        }
+        g_servo_protocol[i].b.protocol = SERVO_PROTOCOL1;
+        g_servo_protocol[i].b.port = port_index;
+        g_count_servos_found++;
+        Serial.print("    ");
+        Serial.print(i, DEC);
+        Serial.print(" - ");
+        Serial.println(w, DEC);
+      }
     }
-    //delay (1);
+
+    Serial.println("  Done");
+    Serial.println("  Begin Protocol 2: ");
+    for (int i = 0; i < 254; i++) {
+      uint16_t model_number;
+      uint32_t position;
+      if (packetHandler2->ping(portHandler, i, &model_number) == COMM_SUCCESS) {
+        if (g_servo_protocol[i].val) {
+          Serial.println("Multiple servos found with same ID");
+        } else {
+          g_count_servos_found++;
+        }
+        g_servo_protocol[i].b.protocol = SERVO_PROTOCOL2;
+        g_servo_protocol[i].b.port = port_index;
+        Serial.print("    ");
+        Serial.print(i, DEC);
+        Serial.print(", Model:");
+        Serial.print(model_number, HEX);
+        packetHandler2->read4ByteTxRx(portHandler, i, DXL_X_PRESENT_POSITION, &position);
+        Serial.print(i, DEC);
+        Serial.print(" - ");
+        Serial.println(position, DEC);
+      }
+    }
+    Serial.println("  Done");
   }
-  Serial.println("Done");
 }
+
+
 //=======================================================================================
-int g_asPositionsPrev[NUM_SERVOS];
-int g_asMins[NUM_SERVOS];
-int g_asMaxs[NUM_SERVOS];
+int g_asPositionsPrev[255];
+int g_asMins[255];
+int g_asMaxs[255];
 
 void TrackServos(boolean fInit) {
 
   uint16_t w;
+  uint32_t dw;
+  int pos;
   bool fSomethingChanged = false;
-  for (int i = 0; i < NUM_SERVOS; i++) {
-    if (packetHandler->read2ByteTxRx(portHandler, pgm_axdIDs[i], AX_PRESENT_POSITION_L, &w) != COMM_SUCCESS) {
-      w = 0xffff;
+  for (int i = 0; i < 254; i++) {
+    if (!g_servo_protocol[i].val) continue;
+    dynamixel::PortHandler *portHandler = portHandlers[g_servo_protocol[i].b.port];
+    pos = 0xffff;
+    if (g_servo_protocol[i].b.protocol == SERVO_PROTOCOL1) {
+      if (packetHandler1->read2ByteTxRx(portHandler, i, AX_PRESENT_POSITION_L, &w) == COMM_SUCCESS)
+        pos = w;
+    } else {
+      if (packetHandler2->read4ByteTxRx(portHandler, i, DXL_X_PRESENT_POSITION, &dw) == COMM_SUCCESS)
+        pos = dw;
     }
     if (fInit) {
-      g_asMins[i] = w;
-      g_asMaxs[i] = w;
+      g_asMins[i] = pos;
+      g_asMaxs[i] = pos;
     }
-    if (w != g_asPositionsPrev[i]) {
+    if (pos != g_asPositionsPrev[i]) {
       if (!fInit) {
-        // only print if we moved more than some delta...
+        // only print if we moved more than some deltas
         if (abs(w - g_asPositionsPrev[i]) > 3) {
           Serial.print(IKPinsNames[i]);
           Serial.print("(");
           Serial.print((byte)pgm_axdIDs[i], DEC);
           Serial.print("):");
-          Serial.print(w, DEC);
-          Serial.print("(");
+          Serial.print(pos, DEC);
+/*          Serial.print("(");
           Serial.print((((long)(w - 512)) * 375L) / 128L, DEC);
-          Serial.print(") ");
+          Serial.print(") "); */
+          Serial.print(" ");
           fSomethingChanged = true;
         }
       }
-      g_asPositionsPrev[i] = w;
-      if (g_asMins[i] > w)
-        g_asMins[i] = w;
+      g_asPositionsPrev[i] = pos;
+      if (g_asMins[i] > pos)
+        g_asMins[i] = pos;
 
-      if (g_asMaxs[i] < w)
-        g_asMaxs[i] = w;
+      if (g_asMaxs[i] < pos)
+        g_asMaxs[i] = pos;
     }
   }
   if (fSomethingChanged)
@@ -617,18 +899,13 @@ void TrackServos(boolean fInit) {
 }
 
 void TrackPrintMinsMaxs(void) {
-  for (int i = 0; i < NUM_SERVOS; i++) {
-    Serial.print((byte)pgm_axdIDs[i], DEC);
+  for (int i = 0; i < 254; i++) {
+    if (!g_servo_protocol[i].val) continue;
+    Serial.print(i, DEC);
     Serial.print(":");
     Serial.print(g_asMins[i], DEC);
-    Serial.print("(");
-    Serial.print((((long)(g_asMins[i] - 512)) * 375L) / 128L, DEC);
-    Serial.print(") ");
-
-    Serial.print(g_asMaxs[i], DEC);
-    Serial.print("(");
-    Serial.print((((long)(g_asMaxs[i] - 512)) * 375L) / 128L, DEC);
-    Serial.println(")");
+    Serial.print(" - ");
+    Serial.println(g_asMaxs[i], DEC);
   }
 }
 
@@ -638,8 +915,10 @@ void PrintServoValues(void) {
 
   word wID;
   word w;
+#ifdef DEBUG_IO_PINS
   pinMode(A2, OUTPUT);
   pinMode(A3, OUTPUT);
+#endif
   if (!FGetNextCmdNum(&wID))
     return;
   for (int i = 0; i < 50; i++) {
@@ -664,30 +943,94 @@ void PrintServoValues(void) {
 }
 
 //=======================================================================================
+void WriteServoValues() {
+  word wID;
+  word wReg;
+  word wVal;
+  uint8_t error;
+  int retval;
+  if (!FGetNextCmdNum(&wID))
+    return;    // no parameters so bail.
 
-uint8_t getServoVoltage(uint8_t id) {
-  uint8_t val;
-  if (packetHandler->read1ByteTxRx(portHandler, id, AX_PRESENT_VOLTAGE, &val) == COMM_SUCCESS)
-    return val;
-  return 0xff;  
+  if (!IsValidServo(wID)) {
+    Serial.print("Write register ID: ");
+    Serial.print(wID, DEC);
+    Serial.println(" Servo not found");
+    return;
+  }
+  dynamixel::PortHandler *portHandler = portHandlers[g_servo_protocol[wID].b.port];
+
+
+  if (!FGetNextCmdNum(&wReg))
+    return;    // no parameters so bail.
+
+  while (FGetNextCmdNum(&wVal)) {
+    Serial.print("Write register ID: ");
+    Serial.print(wID, DEC);
+    Serial.print(" Reg: ");
+    Serial.print(wReg, DEC);
+    Serial.print(" Val: ");
+    Serial.print(wVal, DEC);
+    if (g_servo_protocol[wID].b.protocol == SERVO_PROTOCOL1) {
+      retval = packetHandler1->write1ByteTxRx(portHandler, wID, wReg, wVal, &error);
+    } else {
+      retval = packetHandler2->write1ByteTxRx(portHandler, wID, wReg, wVal, &error);
+    }
+    if (!ReportAnyErrors("Write Reg", wID, retval, error)) {
+        Serial.println(" Success");
+    } else {
+      Serial.println();
+    }
+    wReg++;   // get to the next reg
+  }
 }
+
+
+
+
 
 //=======================================================================================
 uint8_t getServoByte(uint8_t id, uint8_t reg) {
   uint8_t val;
   uint8_t dxl_error = 0;                          // Dynamixel error
-  int dxl_comm_result = packetHandler->read1ByteTxRx(portHandler, id, reg, &val, &dxl_error);
+  int dxl_comm_result;
+
+  if (!IsValidServo(id)) {
+    Serial.println("GSB not valid servo");
+    return 0xff;
+  }
+  dynamixel::PortHandler *portHandler = portHandlers[g_servo_protocol[id].b.port];
+
+  if (g_servo_protocol[id].b.protocol == SERVO_PROTOCOL1) {
+    dxl_comm_result = packetHandler1->read1ByteTxRx(portHandler, id, reg, &val, &dxl_error);
+  } else {
+    dxl_comm_result = packetHandler2->read1ByteTxRx(portHandler, id, reg, &val, &dxl_error);
+  } 
   return (dxl_comm_result == COMM_SUCCESS) ? val : 0xff;
 }
 
+
+
 //=======================================================================================
-void SwitchPortHandler() {
-  if (portHandler == portHandler3) {
-    portHandler = portHandler1;
-    Serial.println("Set PortHandler to Servos on Serial1 (on the CM904)");
-  } else {
-    portHandler = portHandler3;
-    Serial.println("Set porthandler to Servos on Serial3 (on 485 expansion Board)");
-  }  
+void SetBaudRate()
+{
+  word wBaud;
+
+  if (!FGetNextCmdNum(&wBaud))
+    return;    // no parameters so bail.
+  Serial.print("Setting Baud to: ");
+  Serial.println(wBaud);
+
+  for (uint8_t i = 0; i < COUNT_PORTHANDLERS; i++) {
+    if (!portHandlers[i]->setBaudRate(wBaud)) {
+      Serial.print("Failed to change the Port ");
+      Serial.print(port_handler_numbers[i], DEC);
+      Serial.print("Baud to: ");
+      Serial.println(wBaud, DEC);
+    }
+  }
+
+  Serial.println("Doing new Servo Scan");
+  FindServos();
 }
 

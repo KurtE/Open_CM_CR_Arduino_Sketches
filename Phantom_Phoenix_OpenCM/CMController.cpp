@@ -194,7 +194,7 @@ void cm904Controller::readPose() {
       // If we had an error reading servo, lets try locating it again.
       // Maybe will need to add error count or like
       uint8_t handler = findServo(servo->id, servo);
-      if (handler = 0xff) {
+      if (handler == 0xff) {
         // Try again...
         pose = getServoPosition(i, error) << BIOLOID_SHIFT;
       }     
