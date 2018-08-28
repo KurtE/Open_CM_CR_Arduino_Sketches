@@ -7,18 +7,25 @@ extern void signal_abort(uint8_t error);
 
 
 void setup() {
+  #ifdef DBGSerial
+  DBGSerial.begin(115200);  
+  delay(250);
+  DBGSerial.println("OpenCM_Servo_Controller start");
+  #endif
   InitalizeHardwareAndRegisters();
   uint32_t st = millis();
   // Put in fast blink until we have a serial port
+#if 0
   while(!Serial) {
     if ((millis() - st) > 250) {
       digitalWrite(BOARD_LED_PIN, !digitalRead(BOARD_LED_PIN));
       st = millis();
     }
   }
-    
+#endif    
   // put your setup code here, to run once:
   Serial.begin(BAUDRATE);
+  DBGPrintln("After Serial Begin");
 
   // Initialize PortHandler instance
   // Set the port path
@@ -27,6 +34,7 @@ void setup() {
 
   if (!portHandler->openPort()) signal_abort(1);
   if (!portHandler->setBaudRate(BAUDRATE)) signal_abort(2);
+  DBGPrintln("*** End Setup ***");
 }
 
 void loop() {

@@ -130,10 +130,20 @@ void InitalizeHardwareAndRegisters() {
 bool ProcessUSBInputData() {
   bool we_did_something = false;
   // Main loop, lets loop through reading any data that is coming in from the USB
+#ifdef DBGSerial
+  uint8_t debug_output_cnt = 0;
+#endif
   while (Serial.available())
   {
     we_did_something = true;
     uint8_t ch = Serial.read();
+#ifdef DBGSerial
+    DBGSerial.print(ch, HEX);
+    if (++debug_output_cnt == 16) {
+      debug_output_cnt = 0;
+      DBGSerial.println();
+    } else     DBGSerial.print(" ");
+#endif    
     last_message_time = micros();
     switch (dxl_usb_input_state) {
       case AX_SEARCH_FIRST_FF:
@@ -338,6 +348,9 @@ bool ProcessUSBInputData() {
       dxl_usb_input_state = AX_SEARCH_FIRST_FF;
     }
   }
+#ifdef DBGSerial
+  if (debug_output_cnt) DBGSerial.println();
+#endif
 
   return we_did_something;
 
@@ -414,6 +427,9 @@ void sendProtocol1StatusPacket(uint8_t err, uint8_t* data, uint8_t count_bytes) 
   Serial.write(255 - (checksum % 256));
   g_data_output_to_usb = false;
   Serial.flush();
+  #ifdef DBGSerial
+  DBGSerial.printf("\nsendProtocol1StatusPacket err:%x Count: %d\n", err, count_bytes);
+  #endif   
 }
 
 //-----------------------------------------------------------------------------
@@ -440,6 +456,9 @@ void sendProtocol2StatusPacket(uint8_t err, uint8_t* data, uint16_t count_bytes)
   Serial.write(tx_packet_buffer, packet - tx_packet_buffer);
   g_data_output_to_usb = false;
   Serial.flush();   // make sure it goes out as quick as possible
+  #ifdef DBGSerial
+  DBGSerial.printf("\nsendProtocol2StatusPacket err:%x Count: %d\n", err, count_bytes);
+  #endif   
 }
 
 //-----------------------------------------------------------------------------
