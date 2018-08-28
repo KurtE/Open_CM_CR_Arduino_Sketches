@@ -1,21 +1,13 @@
 #include <DynamixelSDK.h>
-#define AX_ID_DEVICE        200    // Default ID
-
-// Default setting
-#define BAUDRATE                        1000000
-#define DEVICENAME                      "1"                 // Check which port is being used on your controller
+#include "globals.h"
 
 dynamixel::PortHandler *portHandler;
-
-#define BUFFER_SIZE 1024      // Should be big enough
-uint8_t from_usb_buffer[BUFFER_SIZE];
-uint8_t from_port_buffer[BUFFER_SIZE];
 
 extern void signal_abort(uint8_t error);
 
 
 void setup() {
-  pinMode(BOARD_LED_PIN, OUTPUT);
+  InitalizeHardwareAndRegisters();
   uint32_t st = millis();
   // Put in fast blink until we have a serial port
   while(!Serial) {
@@ -24,7 +16,6 @@ void setup() {
       st = millis();
     }
   }
-  digitalWrite(BOARD_LED_PIN, LOW);
     
   // put your setup code here, to run once:
   Serial.begin(BAUDRATE);
@@ -68,20 +59,3 @@ void ProcessPortInputData(dynamixel::PortHandler *portHandler) {
     Serial.write(from_port_buffer, cb_port_avail);
   }
 }
-
-//=========================================================================
-// Process USB input data... 
-//=========================================================================
-void ProcessUSBInputData() {
-  int cb_usb_avail = 0;
-  if (Serial.available()) {
-    digitalWrite(BOARD_LED_PIN, !digitalRead(BOARD_LED_PIN));
-    while (Serial.available() && (cb_usb_avail < BUFFER_SIZE)) {
-      from_usb_buffer[cb_usb_avail++] = Serial.read();
-      // Note: we will later look at data to see if it is a packet for us
-    }
-    portHandler->writePort(from_usb_buffer, cb_usb_avail);
-  }
-}
-
-
