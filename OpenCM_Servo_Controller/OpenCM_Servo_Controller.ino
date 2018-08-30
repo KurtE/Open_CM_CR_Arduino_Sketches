@@ -1,45 +1,25 @@
-#include <DynamixelSDK.h>
+#include <EEPROM.h>
+
 #include "globals.h"
-
-dynamixel::PortHandler *portHandler;
-
-extern void signal_abort(uint8_t error);
 
 
 void setup() {
-  #ifdef DBGSerial
-  DBGSerial.begin(115200);  
+#ifdef DBGSerial
+  DBGSerial.begin(115200);
   delay(250);
   DBGSerial.println("OpenCM_Servo_Controller start");
-  #endif
+#endif
   InitalizeHardwareAndRegisters();
   uint32_t st = millis();
-  // Put in fast blink until we have a serial port
-#if 0
-  while(!Serial) {
-    if ((millis() - st) > 250) {
-      digitalWrite(BOARD_LED_PIN, !digitalRead(BOARD_LED_PIN));
-      st = millis();
-    }
-  }
-#endif    
-  // put your setup code here, to run once:
+
   Serial.begin(BAUDRATE);
-  DBGPrintln("After Serial Begin");
 
-  // Initialize PortHandler instance
-  // Set the port path
-  // Get methods and members of PortHandlerLinux or PortHandlerWindows
-  portHandler = dynamixel::PortHandler::getPortHandler(DEVICENAME);
-
-  if (!portHandler->openPort()) signal_abort(1);
-  if (!portHandler->setBaudRate(BAUDRATE)) signal_abort(2);
   DBGPrintln("*** End Setup ***");
 }
 
 void loop() {
-  // Check and process any data coming from the portHandler
-  ProcessPortInputData(portHandler);
+  // Check and process any data coming from the DXL Buss
+  DXL_BUSS.processInput();
 
   // Then process any data coming from the USB
   ProcessUSBInputData();
@@ -47,7 +27,7 @@ void loop() {
 
 // Fatal error - show blink pattern of error number...
 void signal_abort(uint8_t error) {
-  for(;;) {
+  for (;;) {
     for (uint8_t i = 0; i < error; i++) {
       digitalWrite(BOARD_LED_PIN, HIGH);
       delay(100);
@@ -55,15 +35,5 @@ void signal_abort(uint8_t error) {
       delay(100);
     }
     delay(500);
-  }
-}
-
-// Process any data that comes from the Port and forward to USB
-void ProcessPortInputData(dynamixel::PortHandler *portHandler) {
-  // See if any data available from port actually the read takes care of MAX size plus empty
-  int cb_port_avail = portHandler->readPort(from_port_buffer, BUFFER_SIZE);
-  if (cb_port_avail) {
-    // May want to see if we can write that many bytes without blocking...
-    Serial.write(from_port_buffer, cb_port_avail);
   }
 }

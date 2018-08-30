@@ -1,5 +1,9 @@
+//-----------------------------------------------------------------------------
+// Handle the inputs from the USB Host also handle making the OpeCM9.04
+//     look like a DXL device with default address of 200
+//-----------------------------------------------------------------------------
 #include "globals.h"
-
+#include <EEPROM.h>
 //-----------------------------------------------------------------------------
 // Enums and defines
 //-----------------------------------------------------------------------------
@@ -15,34 +19,7 @@ enum {AX_SEARCH_FIRST_FF = 0, AX_SEARCH_SECOND_FF, PACKET_ID, PACKET_LENGTH,
 // P1: ff ff id len INST P1...PN checksum
 // P2: ff ff fd  0   id  lenL lenH INST P1...PN CRC_L CRC_H
 enum {DXL_P2_ID_INDEX = 4, DXL_P2_LEN_L_INDEX, DXL_P2_LEN_H_INDEX, DXL_P2_INST_INDEX, DXL_P2_PARMS_INDEX};
-enum {
-  CM904_MODEL_NUMBER_L              = 0,
-  CM904_MODEL_NUMBER_H              = 1,
-  CM904_FIRMWARE_VERSION            = 2,
-  CM904_ID                          = 3,
-  CM904_BAUD_RATE                   = 4,
-  CM904_RETURN_DELAY_TIME           = 5,
-  CM904_SEND_TIMEOUT                = 6,
-  CM904_RECEIVE_TIMEOUT             = 7,
-  CM904_STATUS_RETURN_LEVEL         = 16,
-  CM904_BUTTON_STATUS               = 26,
-  CM904_RANDOM_NUMBER               = 77,
-  CM904_GREEN_LED                   = 79,
-  CM904_MOTION_LED                  = 82
-};
 
-//Dynamixel device Control table
-#define AX_ID_DEVICE        200    // Default ID
-#define AX_ID_BROADCAST     0xfe
-#define MODEL_NUMBER_L      0x90  //  model #400 by E-manual
-#define MODEL_NUMBER_H      0x01
-#define FIRMWARE_VERSION    0x05  // Firmware version, needs to be updated with every new release
-#define BAUD_RATE           0x03
-#define RETURN_LEVEL         2
-#define REG_TABLE_SIZE      83
-#define     USART_TIMEOUT       50   //  x 20us
-#define     SEND_TIMEOUT        4    //  x 20us
-#define   RECEIVE_TIMEOUT       100  //  x 20us
 
 /** Error Levels **/
 #define ERR_NONE                    0
@@ -80,9 +57,11 @@ uint16_t dxl_protocol1_checksum = 0;
 uint8_t dxl_usb_input_state;
 bool g_data_output_to_usb = false;
 
-//                                                    0             1              2                   3            4             5              6              7
-uint8_t g_controller_registers[REG_TABLE_SIZE] = {MODEL_NUMBER_L, MODEL_NUMBER_H, FIRMWARE_VERSION, AX_ID_DEVICE, USART_TIMEOUT, SEND_TIMEOUT, RECEIVE_TIMEOUT
-                                                 };
+
+//                                                    0             1              2                   3            4             5        
+uint8_t g_controller_registers[REG_TABLE_SIZE] = {MODEL_NUMBER_L, MODEL_NUMBER_H, FIRMWARE_VERSION, AX_ID_DEVICE, BAUD_RATE, RETURN_DELAY,
+//        6                7            8               9             10         11     12      13 14 15      16
+      FIRMWARE_VERSION, AX_ID_DEVICE,BAUD_RATE_UART, RETURN_DELAY, RETURN_LEVEL, 0,  BAUD_RATE, 0, 0, 0,  DYNAMIXEL_CHANNEL  };
 // Protocol 1 version
 const uint8_t g_controller_registers_ranges[][2] =
 {
@@ -100,27 +79,33 @@ const uint8_t g_controller_registers_ranges[][2] =
 //-----------------------------------------------------------------------------
 // Forward references
 //-----------------------------------------------------------------------------
-extern void pass_bytes(uint8_t nb_bytes);
-extern void passBufferedDataToServos(void);
 extern void LocalRegistersRead(uint16_t register_id, uint16_t count_bytes, uint8_t protocol);
 extern void LocalRegistersWrite(uint16_t register_id, uint8_t* data, uint16_t count_bytes, uint8_t protocol);
 extern uint16_t update_crc(uint16_t crc_accum, uint8_t *data_blk_ptr, uint16_t data_blk_size);
+extern void InitalizeRegisterTable(void);
 
 // Helper functions for write
 extern uint8_t ValidateWriteData(uint8_t register_id, uint8_t* data, uint8_t count_bytes);
 extern void SaveEEPromSectionsLocalRegisters(void);
 extern void UpdateHardwareAfterLocalWrite(uint8_t register_id, uint8_t count_bytes);
 extern void CheckHardwareForLocalReadRequest(uint8_t register_id, uint8_t count_bytes);
-
 //-----------------------------------------------------------------------------
 // InitializeHardwareAndRegisters
 //-----------------------------------------------------------------------------
 void InitalizeHardwareAndRegisters() {
+  DBGPrintln("InitializeHardwareAndRegisters");
   pinMode(BOARD_LED_PIN, OUTPUT);
   digitalWrite(BOARD_LED_PIN, LOW);
 
   // initialize the Button pin
   pinMode(BOARD_BUTTON_PIN, INPUT_PULLDOWN);
+
+  // Initialize the register table. 
+  InitalizeRegisterTable();
+
+  if (!DXL_BUSS.openPort(g_controller_registers[DYNAMIXEL_CHANNEL], g_controller_registers[CM904_P2_BAUD_RATE_BUS])) {
+    signal_abort(1);
+  }
 
 }
 
@@ -152,7 +137,7 @@ bool ProcessUSBInputData() {
           dxl_usb_input_state = AX_SEARCH_SECOND_FF;
           from_usb_buffer_count = 1;
         } else {
-          portHandler->writePort(&ch, 1);
+          DXL_BUSS.write(&ch, 1);
         }
         break;
 
@@ -172,11 +157,6 @@ bool ProcessUSBInputData() {
           pass_bytes(1); // let a 0xFF pass
         } else {
           dxl_usb_input_state = PACKET_LENGTH;
-
-          // Check to see if we should start sending out the data here.
-          if (from_usb_buffer[PACKET_ID] != g_controller_registers[CM904_ID] && from_usb_buffer[PACKET_ID] != AX_ID_BROADCAST ) {
-            pass_bytes(from_usb_buffer_count);
-          }
         }
         break;
 
@@ -195,7 +175,7 @@ bool ProcessUSBInputData() {
             passBufferedDataToServos();
           }
         } else {
-          portHandler->writePort(&ch, 1);
+          pass_bytes(from_usb_buffer_count);
           dxl_usb_input_state = AX_PASS_TO_SERVOS;
         }
         break;
@@ -263,7 +243,7 @@ bool ProcessUSBInputData() {
         break;
 
       case AX_PASS_TO_SERVOS:
-        portHandler->writePort(&ch, 1);
+        DXL_BUSS.write(&ch, 1);
         from_usb_buffer_count++;
         if (from_usb_buffer_count >= (from_usb_buffer[PACKET_LENGTH] + 4)) { // we have read all the data for the packet // we have let the right number of bytes pass
           dxl_usb_input_state = AX_SEARCH_FIRST_FF;
@@ -296,7 +276,7 @@ bool ProcessUSBInputData() {
             passBufferedDataToServos();
           }
         } else {
-          portHandler->writePort(&from_usb_buffer[DXL_P2_LEN_L_INDEX], 2);
+          DXL_BUSS.write(&from_usb_buffer[DXL_P2_LEN_L_INDEX], 2);
           dxl_usb_input_state = DXL_P2_PASS_TO_SERVOS;
         }
         break;
@@ -332,7 +312,7 @@ bool ProcessUSBInputData() {
 
         break;
       case DXL_P2_PASS_TO_SERVOS:
-        portHandler->writePort(&ch, 1);
+        DXL_BUSS.write(&ch, 1);
         from_usb_buffer_count++;
         if (from_usb_buffer_count >= (packet_length + 7)) { // we have read all the data for the packet // we have let the right number of bytes pass
           dxl_usb_input_state = AX_SEARCH_FIRST_FF;
@@ -351,7 +331,8 @@ bool ProcessUSBInputData() {
 #ifdef DBGSerial
   if (debug_output_cnt) DBGSerial.println();
 #endif
-
+  // Make sure we are back in input mode from the AX_BUSS
+  DXL_BUSS.switchToInput();
   return we_did_something;
 
 }
@@ -362,7 +343,7 @@ bool ProcessUSBInputData() {
 //-----------------------------------------------------------------------------
 void pass_bytes(uint8_t nb_bytes) {
   if (nb_bytes) {
-    portHandler->writePort(from_usb_buffer, nb_bytes);
+    DXL_BUSS.write(from_usb_buffer, nb_bytes);
   }
 }
 
@@ -428,7 +409,11 @@ void sendProtocol1StatusPacket(uint8_t err, uint8_t* data, uint8_t count_bytes) 
   g_data_output_to_usb = false;
   Serial.flush();
   #ifdef DBGSerial
-  DBGSerial.printf("\nsendProtocol1StatusPacket err:%x Count: %d\n", err, count_bytes);
+  DBGSerial.printf("\nsendProtocol1StatusPacket err:%x Count: %d ", err, count_bytes);
+  for (uint8_t i=0; i < count_bytes; i++) {
+    DBGSerial.printf(" %02x", data[i]);
+  }
+  DBGSerial.println();
   #endif   
 }
 
@@ -457,7 +442,11 @@ void sendProtocol2StatusPacket(uint8_t err, uint8_t* data, uint16_t count_bytes)
   g_data_output_to_usb = false;
   Serial.flush();   // make sure it goes out as quick as possible
   #ifdef DBGSerial
-  DBGSerial.printf("\nsendProtocol2StatusPacket err:%x Count: %d\n", err, count_bytes);
+  DBGSerial.printf("\nsendProtocol2StatusPacket err:%x Count: %d ", err, count_bytes);
+  for (uint16_t i=0; i < count_bytes; i++) {
+    DBGSerial.printf(" %02x", data[i]);
+  }
+  DBGSerial.println();
   #endif   
 }
 
@@ -500,11 +489,9 @@ void LocalRegistersWrite(uint16_t register_id, uint8_t* data, uint16_t count_byt
   } else {
     memcpy(g_controller_registers + register_id, data, count_bytes);
 
-#ifdef LATER
     // If at least some of the registers set is in the EEPROM area, save updates
-    if (register_id <= CM730_STATUS_RETURN_LEVEL)
+    if (register_id <= CM904_EEPROM_LAST_INDEX)
       SaveEEPromSectionsLocalRegisters();
-#endif
     if (protocol == 1)
       sendProtocol1StatusPacket(ERR_NONE, g_controller_registers + register_id, count_bytes);
     else
@@ -542,6 +529,7 @@ uint8_t ValidateWriteData(uint8_t register_id, uint8_t* data, uint8_t count_byte
   if (count_bytes == 0  || ( top >= REG_TABLE_SIZE)) {
     return false;
   }
+#ifdef LATER
   // Check that the value written are acceptable
   for (uint8_t i = 0 ; i < count_bytes; i++ ) {
     uint8_t val = data[i];
@@ -551,6 +539,7 @@ uint8_t ValidateWriteData(uint8_t register_id, uint8_t* data, uint8_t count_byte
       return false;
     }
   }
+#endif
   return true;
 }
 
@@ -571,6 +560,7 @@ void UpdateHardwareAfterLocalWrite(uint8_t register_id, uint8_t count_bytes)
     count_bytes--;
   }
 }
+
 
 //==========================================================================================
 // Protocol 2 stuff.
@@ -619,4 +609,50 @@ uint16_t update_crc(uint16_t crc_accum, uint8_t *data_blk_ptr, uint16_t data_blk
   }
 
   return crc_accum;
+}
+//-----------------------------------------------------------------------------
+// InitializeRegisterTable()
+//-----------------------------------------------------------------------------
+void InitalizeRegisterTable(void)
+{
+  uint8_t saved_reg_values[CM904_EEPROM_LAST_INDEX + 1];
+  uint8_t checksum = 0;
+  DBGPrintln("InitializeRegisterTable"); DBGFlush();
+  // First check to see if valid version is stored in EEPROM...
+  if (EEPROM.read(1) != FIRMWARE_VERSION)
+    return;
+
+  // Now read in the bytes from the EEPROM
+  for (int i = CM904_FIRMWARE_VERSION; i <= CM904_EEPROM_LAST_INDEX; i++)
+  {
+    uint8_t ch = EEPROM.read(1 + i - CM904_FIRMWARE_VERSION);
+    checksum += ch;
+    saved_reg_values[i] = ch;
+  }
+
+  // Now see if the checksum matches
+  if (EEPROM.read(0) == checksum)
+  {
+    DBGPrintln("  Restored registers from EEPROM");
+    // Valid, so copy values into the working table
+    for (int i = CM904_FIRMWARE_VERSION; i <= CM904_EEPROM_LAST_INDEX; i++)
+      g_controller_registers[i] = saved_reg_values[i];
+  }
+}
+
+//-----------------------------------------------------------------------------
+// SaveEEPromSectionsLocalRegisters - Save updated registers out to the Teensy EEProm.
+//-----------------------------------------------------------------------------
+void SaveEEPromSectionsLocalRegisters(void)
+{
+  // Prety stupid here. simply loop and write out data.  Will also keep a checksum...
+  uint8_t checksum = 0;
+
+  for (int i = CM904_FIRMWARE_VERSION; i <= CM904_EEPROM_LAST_INDEX; i++)
+  {
+    EEPROM.write(1 + i - CM904_FIRMWARE_VERSION, g_controller_registers[i]);
+    checksum += g_controller_registers[i];
+  }
+  // Lets write the Checksum
+  EEPROM.write(0, checksum);
 }
