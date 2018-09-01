@@ -1,8 +1,17 @@
+//-----------------------------------------------------------------------------
+// OpenCM9.04 Servos controller - Which tries to emulate some of the 
+//     default firmware that R++ manager restores to the board.
+//     This version will not emulate the motion code, but does try to emulate
+//     many of the other registers and the like
+//-----------------------------------------------------------------------------
 #include <EEPROM.h>
 
 #include "globals.h"
 
 
+//-----------------------------------------------------------------------------
+// Setup
+//-----------------------------------------------------------------------------
 void setup() {
 #ifdef DBGSerial
   DBGSerial.begin(115200);
@@ -17,23 +26,13 @@ void setup() {
   DBGPrintln("*** End Setup ***");
 }
 
+//-----------------------------------------------------------------------------
+// Loop
+//-----------------------------------------------------------------------------
 void loop() {
   // Check and process any data coming from the DXL Buss
   DXL_BUSS.processInput();
 
   // Then process any data coming from the USB
   ProcessUSBInputData();
-}
-
-// Fatal error - show blink pattern of error number...
-void signal_abort(uint8_t error) {
-  for (;;) {
-    for (uint8_t i = 0; i < error; i++) {
-      digitalWrite(BOARD_LED_PIN, HIGH);
-      delay(100);
-      digitalWrite(BOARD_LED_PIN, LOW);
-      delay(100);
-    }
-    delay(500);
-  }
 }

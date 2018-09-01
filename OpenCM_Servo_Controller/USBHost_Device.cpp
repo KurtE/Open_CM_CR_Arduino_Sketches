@@ -269,7 +269,7 @@ bool ProcessUSBInputData() {
         from_usb_buffer[from_usb_buffer_count++] = ch;
         packet_length = (from_usb_buffer[DXL_P2_LEN_H_INDEX] << 8) + from_usb_buffer[DXL_P2_LEN_L_INDEX];
         if (from_usb_buffer[DXL_P2_ID_INDEX] == g_controller_registers[CM904_ID]  ) {
-          if (from_usb_buffer[PACKET_LENGTH] > 1 && from_usb_buffer[PACKET_LENGTH] < (AX_SYNC_READ_MAX_DEVICES + 4)) { // reject message if too short or too big for from_usb_buffer buffer
+          if (packet_length > 2 && packet_length < (sizeof(from_usb_buffer)-7)) { // reject message if too short or too big for from_usb_buffer buffer
             dxl_usb_input_state = DXL_P2_INSTRUCTION;
           } else {
             sendProtocol1StatusPacket(ERR_RANGE, NULL, 0);
@@ -296,14 +296,14 @@ bool ProcessUSBInputData() {
           if (0 /*(dxl_protocol1_checksum % 256) != 255 */) { // ignore message if checksum is bad
             passBufferedDataToServos();
           } else {
-            if (from_usb_buffer[PACKET_INSTRUCTION] == DXL_READ_DATA) {
+            if (from_usb_buffer[DXL_P2_INST_INDEX] == DXL_READ_DATA) {
               // Remember register index and count are 16 bits...
               LocalRegistersRead(from_usb_buffer[DXL_P2_PARMS_INDEX] + from_usb_buffer[DXL_P2_PARMS_INDEX + 1] << 8,
                                  from_usb_buffer[DXL_P2_PARMS_INDEX + 2] + from_usb_buffer[DXL_P2_PARMS_INDEX + 3], 2);
-            } else if (from_usb_buffer[PACKET_INSTRUCTION] == DXL_WRITE_DATA) {
+            } else if (from_usb_buffer[DXL_P2_INST_INDEX] == DXL_WRITE_DATA) {
               LocalRegistersWrite(from_usb_buffer[DXL_P2_PARMS_INDEX] + from_usb_buffer[DXL_P2_PARMS_INDEX + 1] << 8,
                                   &from_usb_buffer[2], packet_length - 5, 2);
-            } else if (from_usb_buffer[PACKET_INSTRUCTION] == DXL_PING) {
+            } else if (from_usb_buffer[DXL_P2_INST_INDEX] == DXL_PING) {
                 sendProtocol2StatusPacket(0, g_controller_registers, 3);   // returns first three bytes of our register table...
             }
             dxl_usb_input_state = AX_SEARCH_FIRST_FF;
@@ -443,8 +443,8 @@ void sendProtocol2StatusPacket(uint8_t err, uint8_t* data, uint16_t count_bytes)
   Serial.flush();   // make sure it goes out as quick as possible
   #ifdef DBGSerial
   DBGSerial.printf("\nsendProtocol2StatusPacket err:%x Count: %d ", err, count_bytes);
-  for (uint16_t i=0; i < count_bytes; i++) {
-    DBGSerial.printf(" %02x", data[i]);
+  for (uint8_t *pb = tx_packet_buffer; pb < packet; pb++) {
+    DBGSerial.printf(" %02x",*pb);
   }
   DBGSerial.println();
   #endif   
@@ -493,9 +493,9 @@ void LocalRegistersWrite(uint16_t register_id, uint8_t* data, uint16_t count_byt
     if (register_id <= CM904_EEPROM_LAST_INDEX)
       SaveEEPromSectionsLocalRegisters();
     if (protocol == 1)
-      sendProtocol1StatusPacket(ERR_NONE, g_controller_registers + register_id, count_bytes);
+      sendProtocol1StatusPacket(ERR_NONE, NULL, 0);
     else
-      sendProtocol2StatusPacket(ERR_NONE, g_controller_registers + register_id, count_bytes);
+      sendProtocol2StatusPacket(ERR_NONE, NULL, 0);
 
     // Check to see if we need to do anything to the hardware in response to the
     // changes
@@ -655,4 +655,19 @@ void SaveEEPromSectionsLocalRegisters(void)
   }
   // Lets write the Checksum
   EEPROM.write(0, checksum);
+}
+
+//-----------------------------------------------------------------------------
+// signal_abort - Fatal error - show blink pattern of error number...
+//-----------------------------------------------------------------------------
+void signal_abort(uint8_t error) {
+  for (;;) {
+    for (uint8_t i = 0; i < error; i++) {
+      digitalWrite(BOARD_LED_PIN, HIGH);
+      delay(100);
+      digitalWrite(BOARD_LED_PIN, LOW);
+      delay(100);
+    }
+    delay(500);
+  }
 }
