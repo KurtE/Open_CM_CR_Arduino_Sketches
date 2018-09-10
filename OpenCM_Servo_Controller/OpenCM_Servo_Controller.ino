@@ -5,7 +5,7 @@
 //     many of the other registers and the like
 //-----------------------------------------------------------------------------
 #include <EEPROM.h>
-
+#include <OLLO.h>
 #include "globals.h"
 
 

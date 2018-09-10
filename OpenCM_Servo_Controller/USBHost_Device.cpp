@@ -4,6 +4,7 @@
 //-----------------------------------------------------------------------------
 #include "globals.h"
 #include <EEPROM.h>
+#include <OLLO.h>
 //-----------------------------------------------------------------------------
 // Enums and defines
 //-----------------------------------------------------------------------------
@@ -46,6 +47,11 @@ enum {DXL_P2_ID_INDEX = 4, DXL_P2_LEN_L_INDEX, DXL_P2_LEN_H_INDEX, DXL_P2_INST_I
 //=========================================================================
 // Globals
 //=========================================================================
+
+OLLO myOLLO;
+OlloDeviceIndex g_ollo_port_device_type[4] = 
+    {(OlloDeviceIndex)0xff, (OlloDeviceIndex)0xff, (OlloDeviceIndex)0xff, (OlloDeviceIndex)0xff};
+
 uint8_t from_usb_buffer[BUFFER_SIZE];
 uint16_t from_usb_buffer_count = 0;
 uint8_t from_port_buffer[BUFFER_SIZE];
@@ -88,7 +94,7 @@ extern void InitalizeRegisterTable(void);
 extern uint8_t ValidateWriteData(uint8_t register_id, uint8_t* data, uint8_t count_bytes);
 extern void SaveEEPromSectionsLocalRegisters(void);
 extern void UpdateHardwareAfterLocalWrite(uint8_t register_id, uint8_t count_bytes);
-extern void CheckHardwareForLocalReadRequest(uint8_t register_id, uint8_t count_bytes);
+extern void CheckHardwareForLocalReadRequest(uint16_t register_id, uint16_t count_bytes);
 //-----------------------------------------------------------------------------
 // InitializeHardwareAndRegisters
 //-----------------------------------------------------------------------------
@@ -103,7 +109,7 @@ void InitalizeHardwareAndRegisters() {
   // Initialize the register table. 
   InitalizeRegisterTable();
 
-  if (!DXL_BUSS.openPort(g_controller_registers[DYNAMIXEL_CHANNEL], g_controller_registers[CM904_P2_BAUD_RATE_BUS])) {
+  if (!DXL_BUSS.openPort(g_controller_registers[CM904_DYNAMIXEL_CHANNEL], g_controller_registers[CM904_P2_BAUD_RATE_BUS])) {
     signal_abort(1);
   }
 
@@ -298,11 +304,11 @@ bool ProcessUSBInputData() {
           } else {
             if (from_usb_buffer[DXL_P2_INST_INDEX] == DXL_READ_DATA) {
               // Remember register index and count are 16 bits...
-              LocalRegistersRead(from_usb_buffer[DXL_P2_PARMS_INDEX] + from_usb_buffer[DXL_P2_PARMS_INDEX + 1] << 8,
-                                 from_usb_buffer[DXL_P2_PARMS_INDEX + 2] + from_usb_buffer[DXL_P2_PARMS_INDEX + 3] << 8, 2);
+              LocalRegistersRead(from_usb_buffer[DXL_P2_PARMS_INDEX] + (from_usb_buffer[DXL_P2_PARMS_INDEX + 1] << 8),
+                                 from_usb_buffer[DXL_P2_PARMS_INDEX + 2] + (from_usb_buffer[DXL_P2_PARMS_INDEX + 3] << 8), 2);
             } else if (from_usb_buffer[DXL_P2_INST_INDEX] == DXL_WRITE_DATA) {
-              LocalRegistersWrite(from_usb_buffer[DXL_P2_PARMS_INDEX] + from_usb_buffer[DXL_P2_PARMS_INDEX + 1] << 8,
-                                  &from_usb_buffer[2], packet_length - 5, 2);
+              LocalRegistersWrite(from_usb_buffer[DXL_P2_PARMS_INDEX] + (from_usb_buffer[DXL_P2_PARMS_INDEX + 1] << 8),
+                                  &from_usb_buffer[DXL_P2_PARMS_INDEX + 2], packet_length - 5, 2);
             } else if (from_usb_buffer[DXL_P2_INST_INDEX] == DXL_PING) {
                 sendProtocol2StatusPacket(0, g_controller_registers, 3);   // returns first three bytes of our register table...
             }
@@ -422,6 +428,11 @@ void sendProtocol1StatusPacket(uint8_t err, uint8_t* data, uint8_t count_bytes) 
 //-----------------------------------------------------------------------------
 void sendProtocol2StatusPacket(uint8_t err, uint8_t* data, uint16_t count_bytes) {
 
+  #ifdef VERBOS // DBGSerial
+  DBGSerial.printf("\nsendProtocol2StatusPacket err:%x Count: %d ", err, count_bytes);
+  DBGSerial.flush();
+  #endif   
+
 // BUGBUG hack see if crash due to large buffer count?
   //count_bytes &= 0xff;
   
@@ -438,20 +449,24 @@ void sendProtocol2StatusPacket(uint8_t err, uint8_t* data, uint16_t count_bytes)
   for (uint16_t i = 0; i < count_bytes; i++) {
     *packet++ = data[i];
   }
-  uint16_t calculated_crc = update_crc ( 0, tx_packet_buffer, packet - tx_packet_buffer) ;
+  uint16_t packet_size = packet - tx_packet_buffer;
+  uint16_t calculated_crc = update_crc ( 0, tx_packet_buffer, packet_size) ;
   *packet++ = calculated_crc & 0xff;
   *packet++ = (calculated_crc >> 8) & 0xff;
-  Serial.write(tx_packet_buffer, packet - tx_packet_buffer);
+  packet_size = packet - tx_packet_buffer;
+
+  #ifdef VERBOS // DBGSerial
+  DBGSerial.printf(" size: %d ", packet_size);
+
+  //for (uint8_t *pb = tx_packet_buffer; pb < packet; pb++) {
+  //  DBGSerial.printf(" %02x",*pb);
+  //}
+  DBGSerial.println();
+  DBGSerial.flush();
+  #endif   
+  Serial.write(tx_packet_buffer, packet_size);
   g_data_output_to_usb = false;
   Serial.flush();   // make sure it goes out as quick as possible
-  #ifdef DBGSerial
-  DBGSerial.printf("\nsendProtocol2StatusPacket err:%x Count: %d ", err, count_bytes);
-  if (count_bytes > 100) count_bytes = 100;   // Let's not dump Too much
-  for (uint8_t *pb = tx_packet_buffer; pb < packet; pb++) {
-    DBGSerial.printf(" %02x",*pb);
-  }
-  DBGSerial.println();
-  #endif   
 }
 
 //-----------------------------------------------------------------------------
@@ -485,6 +500,14 @@ void LocalRegistersRead(uint16_t register_id, uint16_t count_bytes, uint8_t prot
 //-----------------------------------------------------------------------------
 void LocalRegistersWrite(uint16_t register_id, uint8_t* data, uint16_t count_bytes, uint8_t protocol)
 {
+  #ifdef DBGSerial
+  DBGSerial.printf("\nsLocalRegistersWrite id:%x Count: %d ", register_id, count_bytes);
+  for (uint16_t i = 0; i < count_bytes; i++) {
+    DBGSerial.printf(" %x", data[i]);
+  }
+  DBGSerial.println();
+  #endif   
+
   if ( ! ValidateWriteData(register_id, data, count_bytes) ) {
     if (protocol == 1)
       sendProtocol1StatusPacket(ERR_RANGE, g_controller_registers + register_id, count_bytes);
@@ -506,18 +529,112 @@ void LocalRegistersWrite(uint16_t register_id, uint8_t* data, uint16_t count_byt
     UpdateHardwareAfterLocalWrite(register_id, count_bytes);
   }
 }
+//-----------------------------------------------------------------------------
+// Read the OLLO device - make sure configured for the right one. 
+//-----------------------------------------------------------------------------
+void ReadOLLODevice(uint8_t devNum, OlloDeviceIndex device_index, uint16_t reg_num, uint8_t cb)
+{
+  if (g_ollo_port_device_type[devNum-1] != device_index) {
+    myOLLO.begin(devNum, device_index);
+    g_ollo_port_device_type[devNum-1] = device_index;
+  }
+  uint16_t w = (uint16_t)myOLLO.read(devNum, device_index);
+  g_controller_registers[reg_num] = w & 0xff; // low byte
+  if (cb > 1) {
+    g_controller_registers[reg_num+1] = w >> 8; // High byte
+  }
+  
+}
 
 //-----------------------------------------------------------------------------
 // CheckHardwareForLocalReadRequest - Some of this will change later to probably
 //        some background tasks...
 //-----------------------------------------------------------------------------
-void CheckHardwareForLocalReadRequest(uint8_t register_id, uint8_t count_bytes)
+void CheckHardwareForLocalReadRequest(uint16_t register_id, uint16_t count_bytes)
 {
   while (count_bytes) {
     switch (register_id) {
       case CM904_BUTTON_STATUS:
         g_controller_registers[CM904_BUTTON_STATUS] = digitalRead(BOARD_BUTTON_PIN);
         break;
+      case CM904_RANDOM_NUMBER:
+        g_controller_registers[CM904_RANDOM_NUMBER] = random(256);
+        break;
+      case CMS904_Port1_IR_Sensor:           //P2 2r
+        ReadOLLODevice(1, IR_SENSOR, CMS904_Port1_IR_Sensor, 2); 
+        break;
+      case CMS904_Port4_IR_Sensor:           //P2 2r
+        ReadOLLODevice(4, IR_SENSOR, CMS904_Port4_IR_Sensor, 2); 
+        break;
+      case CMS904_Port1_DMS_Sensor:          //P2 2r
+        ReadOLLODevice(1, DMS_SENSOR, CMS904_Port1_DMS_Sensor, 2); 
+        break;
+      case CMS904_Port2_DMS_Sensor:          //P2 2r
+        ReadOLLODevice(2, DMS_SENSOR, CMS904_Port2_DMS_Sensor, 2); 
+        break;
+      case CMS904_Port3_DMS_Sensor:          //P2 2r
+        ReadOLLODevice(3, DMS_SENSOR, CMS904_Port3_DMS_Sensor, 2); 
+        break;
+      case CMS904_Port4_DMS_Sensor:          //P2 2r
+        ReadOLLODevice(4, DMS_SENSOR, CMS904_Port4_DMS_Sensor, 2); 
+        break;
+      case CMS904_Port1_Touch_Sensor:        //P2 1r
+        ReadOLLODevice(1, TOUCH_SENSOR, CMS904_Port1_Touch_Sensor, 1); 
+        break;
+      case CMS904_Port2_Touch_Sensor:        //P2 1r
+        ReadOLLODevice(2, TOUCH_SENSOR, CMS904_Port2_Touch_Sensor, 1); 
+        break;
+      case CMS904_Port3_Touch_Sensor:        //P2 1r
+        ReadOLLODevice(3, TOUCH_SENSOR, CMS904_Port3_Touch_Sensor, 1); 
+        break;
+      case CMS904_Port4_Touch_Sensor:        //P2 1r
+        ReadOLLODevice(4, TOUCH_SENSOR, CMS904_Port4_Touch_Sensor, 1); 
+        break;
+      case CMS904_Port2_LED_Module:          //P2 1rw
+        break;
+      case CMS904_Port3_LED_Module:          //P2 1rw
+        break;
+      case CMS904_Port2_User_Device:         //P2 2rw
+        break;
+      case CMS904_Port3_User_Device:         //P2 2rw
+        break;
+      case CMS904_Port1_Temperature_Sensor:  //P2 1r
+        break;
+      case CMS904_Port2_Temperature_Sensor:  //P2 1r
+        break;
+      case CMS904_Port3_Temperature_Sensor:  //P2 1r
+        break;
+      case CMS904_Port4_Temperature_Sensor:  //P2 1r
+        break;
+      case CMS904_Port1_Ultrasonic_Sensor:   //P2 1r
+        break;
+      case CMS904_Port2_Ultrasonic_Sensor:   //P2 1r
+        break;
+      case CMS904_Port3_Ultrasonic_Sensor:   //P2 1r
+        break;
+      case CMS904_Port4_Ultrasonic_Sensor:   //P2 1r
+        break;
+      case CMS904_Port1_Magnetic_Sensor:     //P2 1r
+        break;
+      case CMS904_Port2_Magnetic_Sensor:     //P2 1r
+        break;
+      case CMS904_Port3_Magnetic_Sensor:     //P2 1r
+        break;
+      case CMS904_Port4_Magnetic_Sensor:     //P2 1r
+        break;
+      case CMS904_Port1_Motion_Sensor:       //P2 1r
+        break;
+      case CMS904_Port2_Motion_Sensor:       //P2 1r
+        break;
+      case CMS904_Port3_Motion_Sensor:       //P2 1r
+        break;
+      case CMS904_Port4_Motion_Sensor:       //P2 1r
+        break;
+      case CMS904_Port2_Color_Sensor:        //P2 1r
+        break;
+      case CMS904_Port3_Color_Sensor:        //P2 1r
+        break;
+
     }
     register_id++;
     count_bytes--;
@@ -555,7 +672,7 @@ void UpdateHardwareAfterLocalWrite(uint8_t register_id, uint8_t count_bytes)
   while (count_bytes) {
     switch (register_id) {
       case CM904_GREEN_LED:
-        digitalWriteFast(BOARD_LED_PIN, g_controller_registers[CM904_GREEN_LED]);
+        digitalWriteFast(BOARD_LED_PIN, !g_controller_registers[CM904_GREEN_LED]);
         break;
       case CM904_MOTION_LED:
         break;
