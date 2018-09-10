@@ -39,26 +39,29 @@ bool   _DXL_BUSS::openPort(uint8_t dxl_buss, uint8_t baud_index) {
     case 7: dxl_baud = 4500000; break;
   }
 
-  DBGPrint("    Before begin: ");
+  DBGPrint("    Before begin: "); DBGFlush();
   DBGPrintln2(dxl_baud, DEC);
   if (dxl_buss == 0) {
     Serial1.setDxlMode(true);
     Serial1.begin(dxl_baud);
+    Serial1.transmitterEnable(DXL_DIR_1);
     _direction_pin = DXL_DIR_1;
   } else {
     Serial3.setDxlMode(true);
     Serial3.begin(dxl_baud);
+    Serial3.transmitterEnable(DXL_DIR_3);
     _direction_pin = DXL_DIR_3;
   }
-  DBGPrintln("    After begin");
+  DBGPrintln("    After begin"); DBGFlush();
 
   // Initialize the direction Pin
+#if 0
   DBGPrint("    Before pin mode: ");
   DBGPrintln2(_direction_pin, DEC);
   pinMode(_direction_pin, OUTPUT);
   digitalWrite(_direction_pin, LOW);
   _port_write_mode = false;
-
+#endif
   return true;
 }
 
@@ -98,6 +101,8 @@ bool   _DXL_BUSS::processInput() {
 //-----------------------------------------------------------------------------
 void   _DXL_BUSS::write(uint8_t *pb, uint16_t cb) {
   // See if we are already in Write mode.
+  digitalWriteFast(4, HIGH);
+#if 0
   if (!_port_write_mode) {
     if (_dxl_buss) {
       digitalWriteFast(DXL_DIR_3, HIGH);
@@ -106,6 +111,7 @@ void   _DXL_BUSS::write(uint8_t *pb, uint16_t cb) {
     }
     _port_write_mode = true;
   }
+#endif  
   if (_dxl_buss) {
     Serial3.write(pb, cb);
   } else {
@@ -115,11 +121,13 @@ void   _DXL_BUSS::write(uint8_t *pb, uint16_t cb) {
 #ifdef DBGSerial
   DBGSerial.print("<");
   while (cb) {
-    DBGSerial.printf(" %02x", *pb++);
+    DBGSerial.print(" ");
+    DBGSerial.print(*pb++, HEX);
     cb--;
   }
   DBGSerial.print(">");
 #endif
+  digitalWriteFast(4, LOW);
 }
 
 //-----------------------------------------------------------------------------
@@ -127,6 +135,12 @@ void   _DXL_BUSS::write(uint8_t *pb, uint16_t cb) {
 //    back from servos on AX Buss
 //-----------------------------------------------------------------------------
 void   _DXL_BUSS::switchToInput(void) {
+  if (_dxl_buss) {
+    Serial3.flush();
+  } else {
+    Serial1.flush();
+  }
+#if 0
   if (_port_write_mode) {
     // Note may speed up later...
     if (_dxl_buss)
@@ -135,4 +149,5 @@ void   _DXL_BUSS::switchToInput(void) {
       digitalWriteFast(DXL_DIR_1, LOW);
     _port_write_mode = false;
   }
+#endif  
 }

@@ -299,7 +299,7 @@ bool ProcessUSBInputData() {
             if (from_usb_buffer[DXL_P2_INST_INDEX] == DXL_READ_DATA) {
               // Remember register index and count are 16 bits...
               LocalRegistersRead(from_usb_buffer[DXL_P2_PARMS_INDEX] + from_usb_buffer[DXL_P2_PARMS_INDEX + 1] << 8,
-                                 from_usb_buffer[DXL_P2_PARMS_INDEX + 2] + from_usb_buffer[DXL_P2_PARMS_INDEX + 3], 2);
+                                 from_usb_buffer[DXL_P2_PARMS_INDEX + 2] + from_usb_buffer[DXL_P2_PARMS_INDEX + 3] << 8, 2);
             } else if (from_usb_buffer[DXL_P2_INST_INDEX] == DXL_WRITE_DATA) {
               LocalRegistersWrite(from_usb_buffer[DXL_P2_PARMS_INDEX] + from_usb_buffer[DXL_P2_PARMS_INDEX + 1] << 8,
                                   &from_usb_buffer[2], packet_length - 5, 2);
@@ -422,6 +422,9 @@ void sendProtocol1StatusPacket(uint8_t err, uint8_t* data, uint8_t count_bytes) 
 //-----------------------------------------------------------------------------
 void sendProtocol2StatusPacket(uint8_t err, uint8_t* data, uint16_t count_bytes) {
 
+// BUGBUG hack see if crash due to large buffer count?
+  //count_bytes &= 0xff;
+  
   uint8_t *packet = tx_packet_buffer;
   *packet++ = 0xFF;   //0
   *packet++ = 0xFF;   // 1
@@ -432,7 +435,7 @@ void sendProtocol2StatusPacket(uint8_t err, uint8_t* data, uint16_t count_bytes)
   *packet++ = (count_bytes + 4) >> 8; // 6 MSB count
   *packet++ = 0x55;   // 7 Instruction
   *packet++ = err;
-  for (uint8_t i = 0; i < count_bytes; i++) {
+  for (uint16_t i = 0; i < count_bytes; i++) {
     *packet++ = data[i];
   }
   uint16_t calculated_crc = update_crc ( 0, tx_packet_buffer, packet - tx_packet_buffer) ;
@@ -443,6 +446,7 @@ void sendProtocol2StatusPacket(uint8_t err, uint8_t* data, uint16_t count_bytes)
   Serial.flush();   // make sure it goes out as quick as possible
   #ifdef DBGSerial
   DBGSerial.printf("\nsendProtocol2StatusPacket err:%x Count: %d ", err, count_bytes);
+  if (count_bytes > 100) count_bytes = 100;   // Let's not dump Too much
   for (uint8_t *pb = tx_packet_buffer; pb < packet; pb++) {
     DBGSerial.printf(" %02x",*pb);
   }

@@ -13,9 +13,10 @@
 //#define DBGSerial     Serial2
 
 
+#define REG_TABLE_SIZE      400 // Aways up the register table... 
 #define BUFFER_SIZE 1024      // Should be big enough
 #define AX_SYNC_READ_MAX_DEVICES    120
-#define DXL_MAX_RETURN_PACKET_SIZE   235
+#define DXL_MAX_RETURN_PACKET_SIZE   512
 #define AX_ID_DEVICE        200    // Default ID
 // Default setting
 #define BAUDRATE                        1000000
@@ -32,7 +33,6 @@
 #define RETURN_LEVEL         2
 #define RETURN_DELAY         0
 #define DYNAMIXEL_CHANNEL    0  // 0 = Serial1 and 1 = Serial3
-#define REG_TABLE_SIZE      83
 
 // Device register index
 enum {
