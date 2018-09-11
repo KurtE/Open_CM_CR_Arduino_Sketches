@@ -101,10 +101,20 @@ extern void CheckHardwareForLocalReadRequest(uint16_t register_id, uint16_t coun
 void InitalizeHardwareAndRegisters() {
   DBGPrintln("InitializeHardwareAndRegisters");
   pinMode(BOARD_LED_PIN, OUTPUT);
-  digitalWrite(BOARD_LED_PIN, LOW);
+  digitalWrite(BOARD_LED_PIN, HIGH);
 
   // initialize the Button pin
   pinMode(BOARD_BUTTON_PIN, INPUT_PULLDOWN);
+
+  // OpenCM485 expansion 
+  pinMode(16, INPUT_PULLDOWN);
+  pinMode(17, INPUT_PULLDOWN);
+  pinMode(18, OUTPUT);
+  digitalWrite(18, HIGH);
+  pinMode(19, OUTPUT);
+  digitalWrite(19, HIGH);
+  pinMode(20, OUTPUT);
+  digitalWrite(20, HIGH);
 
   // Initialize the register table. 
   InitalizeRegisterTable();
@@ -557,82 +567,88 @@ void CheckHardwareForLocalReadRequest(uint16_t register_id, uint16_t count_bytes
       case CM904_BUTTON_STATUS:
         g_controller_registers[CM904_BUTTON_STATUS] = digitalRead(BOARD_BUTTON_PIN);
         break;
+      case CM485_BUTTON1:
+        g_controller_registers[CM485_BUTTON1] = digitalRead(16);
+        break;
+      case CM485_BUTTON2:
+        g_controller_registers[CM485_BUTTON2] = digitalRead(17);
+        break;
       case CM904_RANDOM_NUMBER:
         g_controller_registers[CM904_RANDOM_NUMBER] = random(256);
         break;
-      case CMS904_Port1_IR_Sensor:           //P2 2r
-        ReadOLLODevice(1, IR_SENSOR, CMS904_Port1_IR_Sensor, 2); 
+      case CM904_Port1_IR_Sensor:           //P2 2r
+        ReadOLLODevice(1, IR_SENSOR, CM904_Port1_IR_Sensor, 2); 
         break;
-      case CMS904_Port4_IR_Sensor:           //P2 2r
-        ReadOLLODevice(4, IR_SENSOR, CMS904_Port4_IR_Sensor, 2); 
+      case CM904_Port4_IR_Sensor:           //P2 2r
+        ReadOLLODevice(4, IR_SENSOR, CM904_Port4_IR_Sensor, 2); 
         break;
-      case CMS904_Port1_DMS_Sensor:          //P2 2r
-        ReadOLLODevice(1, DMS_SENSOR, CMS904_Port1_DMS_Sensor, 2); 
+      case CM904_Port1_DMS_Sensor:          //P2 2r
+        ReadOLLODevice(1, DMS_SENSOR, CM904_Port1_DMS_Sensor, 2); 
         break;
-      case CMS904_Port2_DMS_Sensor:          //P2 2r
-        ReadOLLODevice(2, DMS_SENSOR, CMS904_Port2_DMS_Sensor, 2); 
+      case CM904_Port2_DMS_Sensor:          //P2 2r
+        ReadOLLODevice(2, DMS_SENSOR, CM904_Port2_DMS_Sensor, 2); 
         break;
-      case CMS904_Port3_DMS_Sensor:          //P2 2r
-        ReadOLLODevice(3, DMS_SENSOR, CMS904_Port3_DMS_Sensor, 2); 
+      case CM904_Port3_DMS_Sensor:          //P2 2r
+        ReadOLLODevice(3, DMS_SENSOR, CM904_Port3_DMS_Sensor, 2); 
         break;
-      case CMS904_Port4_DMS_Sensor:          //P2 2r
-        ReadOLLODevice(4, DMS_SENSOR, CMS904_Port4_DMS_Sensor, 2); 
+      case CM904_Port4_DMS_Sensor:          //P2 2r
+        ReadOLLODevice(4, DMS_SENSOR, CM904_Port4_DMS_Sensor, 2); 
         break;
-      case CMS904_Port1_Touch_Sensor:        //P2 1r
-        ReadOLLODevice(1, TOUCH_SENSOR, CMS904_Port1_Touch_Sensor, 1); 
+      case CM904_Port1_Touch_Sensor:        //P2 1r
+        ReadOLLODevice(1, TOUCH_SENSOR, CM904_Port1_Touch_Sensor, 1); 
         break;
-      case CMS904_Port2_Touch_Sensor:        //P2 1r
-        ReadOLLODevice(2, TOUCH_SENSOR, CMS904_Port2_Touch_Sensor, 1); 
+      case CM904_Port2_Touch_Sensor:        //P2 1r
+        ReadOLLODevice(2, TOUCH_SENSOR, CM904_Port2_Touch_Sensor, 1); 
         break;
-      case CMS904_Port3_Touch_Sensor:        //P2 1r
-        ReadOLLODevice(3, TOUCH_SENSOR, CMS904_Port3_Touch_Sensor, 1); 
+      case CM904_Port3_Touch_Sensor:        //P2 1r
+        ReadOLLODevice(3, TOUCH_SENSOR, CM904_Port3_Touch_Sensor, 1); 
         break;
-      case CMS904_Port4_Touch_Sensor:        //P2 1r
-        ReadOLLODevice(4, TOUCH_SENSOR, CMS904_Port4_Touch_Sensor, 1); 
+      case CM904_Port4_Touch_Sensor:        //P2 1r
+        ReadOLLODevice(4, TOUCH_SENSOR, CM904_Port4_Touch_Sensor, 1); 
         break;
-      case CMS904_Port2_LED_Module:          //P2 1rw
+      case CM904_Port2_LED_Module:          //P2 1rw
         break;
-      case CMS904_Port3_LED_Module:          //P2 1rw
+      case CM904_Port3_LED_Module:          //P2 1rw
         break;
-      case CMS904_Port2_User_Device:         //P2 2rw
+      case CM904_Port2_User_Device:         //P2 2rw
         break;
-      case CMS904_Port3_User_Device:         //P2 2rw
+      case CM904_Port3_User_Device:         //P2 2rw
         break;
-      case CMS904_Port1_Temperature_Sensor:  //P2 1r
+      case CM904_Port1_Temperature_Sensor:  //P2 1r
         break;
-      case CMS904_Port2_Temperature_Sensor:  //P2 1r
+      case CM904_Port2_Temperature_Sensor:  //P2 1r
         break;
-      case CMS904_Port3_Temperature_Sensor:  //P2 1r
+      case CM904_Port3_Temperature_Sensor:  //P2 1r
         break;
-      case CMS904_Port4_Temperature_Sensor:  //P2 1r
+      case CM904_Port4_Temperature_Sensor:  //P2 1r
         break;
-      case CMS904_Port1_Ultrasonic_Sensor:   //P2 1r
+      case CM904_Port1_Ultrasonic_Sensor:   //P2 1r
         break;
-      case CMS904_Port2_Ultrasonic_Sensor:   //P2 1r
+      case CM904_Port2_Ultrasonic_Sensor:   //P2 1r
         break;
-      case CMS904_Port3_Ultrasonic_Sensor:   //P2 1r
+      case CM904_Port3_Ultrasonic_Sensor:   //P2 1r
         break;
-      case CMS904_Port4_Ultrasonic_Sensor:   //P2 1r
+      case CM904_Port4_Ultrasonic_Sensor:   //P2 1r
         break;
-      case CMS904_Port1_Magnetic_Sensor:     //P2 1r
+      case CM904_Port1_Magnetic_Sensor:     //P2 1r
         break;
-      case CMS904_Port2_Magnetic_Sensor:     //P2 1r
+      case CM904_Port2_Magnetic_Sensor:     //P2 1r
         break;
-      case CMS904_Port3_Magnetic_Sensor:     //P2 1r
+      case CM904_Port3_Magnetic_Sensor:     //P2 1r
         break;
-      case CMS904_Port4_Magnetic_Sensor:     //P2 1r
+      case CM904_Port4_Magnetic_Sensor:     //P2 1r
         break;
-      case CMS904_Port1_Motion_Sensor:       //P2 1r
+      case CM904_Port1_Motion_Sensor:       //P2 1r
         break;
-      case CMS904_Port2_Motion_Sensor:       //P2 1r
+      case CM904_Port2_Motion_Sensor:       //P2 1r
         break;
-      case CMS904_Port3_Motion_Sensor:       //P2 1r
+      case CM904_Port3_Motion_Sensor:       //P2 1r
         break;
-      case CMS904_Port4_Motion_Sensor:       //P2 1r
+      case CM904_Port4_Motion_Sensor:       //P2 1r
         break;
-      case CMS904_Port2_Color_Sensor:        //P2 1r
+      case CM904_Port2_Color_Sensor:        //P2 1r
         break;
-      case CMS904_Port3_Color_Sensor:        //P2 1r
+      case CM904_Port3_Color_Sensor:        //P2 1r
         break;
 
     }
@@ -674,7 +690,26 @@ void UpdateHardwareAfterLocalWrite(uint8_t register_id, uint8_t count_bytes)
       case CM904_GREEN_LED:
         digitalWriteFast(BOARD_LED_PIN, !g_controller_registers[CM904_GREEN_LED]);
         break;
-      case CM904_MOTION_LED:
+      case CM485_LED1:
+        digitalWriteFast(18, !g_controller_registers[CM485_LED1]);
+      case CM485_LED2:
+        digitalWriteFast(19, !g_controller_registers[CM485_LED2]);
+      case CM485_LED3:
+        digitalWriteFast(20, !g_controller_registers[CM485_LED3]);
+      //case CM904_MOTION_LED:
+      case CM904_P2_BAUD_RATE_BUS:
+        if (DXL_BUSS._dxl_baud != g_controller_registers[CM904_P2_BAUD_RATE_BUS]) {
+          DXL_BUSS.setBaudRate(g_controller_registers[CM904_P2_BAUD_RATE_BUS]);
+        }
+        break;
+      case CM904_DYNAMIXEL_CHANNEL:
+        // If we change ports, Close the previous one and open the new one.
+        if (DXL_BUSS._dxl_buss != g_controller_registers[CM904_DYNAMIXEL_CHANNEL]) {
+          DXL_BUSS.closePort();
+          if (!DXL_BUSS.openPort(g_controller_registers[CM904_DYNAMIXEL_CHANNEL], g_controller_registers[CM904_P2_BAUD_RATE_BUS])) {
+            signal_abort(3);
+          }
+        }
         break;
     }
     register_id++;

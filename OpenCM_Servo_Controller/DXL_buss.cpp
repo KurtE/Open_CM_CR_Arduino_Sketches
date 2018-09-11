@@ -17,28 +17,32 @@ uint8_t  _DXL_BUSS::_dxl_baud;
 uint8_t  _DXL_BUSS::_direction_pin;
 bool     _DXL_BUSS::_port_write_mode = false;
 
+//-----------------------------------------------------------------------------
+// convertBaudIndex
+//-----------------------------------------------------------------------------
+uint32_t _DXL_BUSS::convertBaudIndex(uint8_t baud_index) {
+  switch (baud_index) {
+    case 0: return 9600;
+    case 1: return 57600;
+    case 2: return 115200;
+    default:
+    case 3: return 1000000;
+    case 4: return 2000000;
+    case 5: return 3000000;
+    case 6: return 4000000;
+    case 7: return 4500000;
+  }
+}
 
 //-----------------------------------------------------------------------------
-//
+// openPort 
 //-----------------------------------------------------------------------------
 bool   _DXL_BUSS::openPort(uint8_t dxl_buss, uint8_t baud_index) {
   DBGPrintln("_DXL_BUSS::openPort"); DBGFlush();
   _dxl_buss = dxl_buss;
   _dxl_baud = baud_index;
 
-  uint32_t dxl_baud;
-  switch (baud_index) {
-    case 0: dxl_baud = 9600; break;
-    case 1: dxl_baud = 57600; break;
-    case 2: dxl_baud = 115200; break;
-    default:
-    case 3: dxl_baud = 1000000; break;
-    case 4: dxl_baud = 2000000; break;
-    case 5: dxl_baud = 3000000; break;
-    case 6: dxl_baud = 4000000; break;
-    case 7: dxl_baud = 4500000; break;
-  }
-
+  uint32_t dxl_baud = convertBaudIndex(baud_index);
   DBGPrint("    Before begin: "); DBGFlush();
   DBGPrintln2(dxl_baud, DEC);
   if (dxl_buss == 0) {
@@ -66,7 +70,7 @@ bool   _DXL_BUSS::openPort(uint8_t dxl_buss, uint8_t baud_index) {
 }
 
 //-----------------------------------------------------------------------------
-//
+// closePort - Close out the serial 
 //-----------------------------------------------------------------------------
 void   _DXL_BUSS::closePort() {
   if (_dxl_buss)
@@ -74,6 +78,21 @@ void   _DXL_BUSS::closePort() {
   else
     Serial1.end();
   _dxl_buss = 0;
+}
+
+//-----------------------------------------------------------------------------
+//  setBaudRate - Update the baud rate. 
+//-----------------------------------------------------------------------------
+void   _DXL_BUSS::setBaudRate(uint8_t baud_index) {
+  DBGPrintln("_DXL_BUSS::setBaudRate"); DBGFlush();
+  _dxl_baud = baud_index;
+  uint32_t dxl_baud = convertBaudIndex(baud_index);
+  if (_dxl_buss == 0) {
+    Serial1.begin(dxl_baud);
+  } else {
+    Serial3.begin(dxl_baud);
+  }
+  
 }
 
 //-----------------------------------------------------------------------------
