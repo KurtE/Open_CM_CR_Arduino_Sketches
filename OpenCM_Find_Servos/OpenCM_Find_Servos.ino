@@ -208,15 +208,17 @@ void setup() {
   for (uint8_t i = 0; i < COUNT_PORTHANDLERS; i++) {
     itoa(port_handler_numbers[i], port_string, sizeof(port_string));
     portHandlers[i] = dynamixel::PortHandler::getPortHandler(port_string);
-
+    Serial.printf("Get Port Handler %s %x\n", port_string, (uint32_t)portHandlers[i]);
     // Lets init the two different port handlers.
 #if defined(SERVO_DIRECTION_PIN)
     portHandlers[i]->setTXEnablePin(SERVO_DIRECTION_PIN);
 #endif
+    Serial.println("    Call Open Port");
     if (!portHandlers[i]->openPort()) {
       Serial.print("Failed to open port 1 the Dynamixel port: ");
       Serial.println(port_string);
     }
+    Serial.println("    Set Baud Rate");
     if (!portHandlers[i]->setBaudRate(g_baud_rate)) {
       Serial.print("Failed to change the Port 1 Dynamixel baudrate: ");
       Serial.println(port_string);
@@ -293,9 +295,8 @@ void FindServos(void) {
         Serial.print("    ");
         Serial.print(i, DEC);
         Serial.print(", Model:");
-        Serial.print(model_number, HEX);
+        Serial.print((int)model_number, HEX);
         packetHandler2->read4ByteTxRx(portHandler, i, DXL_X_PRESENT_POSITION, &position);
-        Serial.print(i, DEC);
         Serial.print(" - ");
         Serial.println(position, DEC);
       }
@@ -342,4 +343,3 @@ void SetBaudRate(uint32_t new_baud)
   }
   g_baud_rate = new_baud;
 }
-

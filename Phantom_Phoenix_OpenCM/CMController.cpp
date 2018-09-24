@@ -75,7 +75,7 @@ void cm904Controller::setup(int servo_cnt, const char *portName, uint8_t protoco
 bool cm904Controller::addPortProtocol(char *portName, uint8_t protocol, uint32_t baud) {
   if ((count_handlers_+1) >= MAX_PORT_PROTOL_HANDLERS) return false;
 
-  if (portName != nullptr) {
+  if (portName != NULL) {
     portHandler[count_handlers_] = dynamixel::PortHandler::getPortHandler(portName);
     // Open port
     if (!portHandler[count_handlers_]->openPort()) {
@@ -527,6 +527,5 @@ servo_info_t *cm904Controller::mapIDtoServoInfo(int id) {
     if ( servo->id == id ) return servo;
     servo++;
   }
-  return nullptr;
+  return NULL;
 }
-

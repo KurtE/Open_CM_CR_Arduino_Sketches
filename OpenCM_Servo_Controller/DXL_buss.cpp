@@ -6,8 +6,13 @@
 //-----------------------------------------------------------------------------
 // Defines
 //-----------------------------------------------------------------------------
+#if defined(__OPENCR__)
+#define DXL_DIR_3 BDPIN_DXL_DIR
+#elif defined(__OPENCM904__)
 #define DXL_DIR_1   28      // Direction pin for Serial1
 #define DXL_DIR_3   22
+#endif
+
 //-----------------------------------------------------------------------------
 // Globals.
 //-----------------------------------------------------------------------------
@@ -45,6 +50,7 @@ bool   _DXL_BUSS::openPort(uint8_t dxl_buss, uint8_t baud_index) {
   uint32_t dxl_baud = convertBaudIndex(baud_index);
   DBGPrint("    Before begin: "); DBGFlush();
   DBGPrintln2(dxl_baud, DEC);
+#if defined(__OPENCM904__)
   if (dxl_buss == 0) {
     Serial1.setDxlMode(true);
     Serial1.begin(dxl_baud);
@@ -56,6 +62,15 @@ bool   _DXL_BUSS::openPort(uint8_t dxl_buss, uint8_t baud_index) {
     Serial3.transmitterEnable(DXL_DIR_3);
     _direction_pin = DXL_DIR_3;
   }
+#elif defined(__OPENCM904__)
+  Serial3.begin(dxl_baud);
+  Serial3.transmitterEnable(DXL_DIR_3);
+  _direction_pin = DXL_DIR_3;
+
+  pinMode(BDPIN_DXL_PWR_EN, OUTPUT);
+  digitalWrite(BDPIN_DXL_PWR_EN, HIGH);
+
+#endif
   DBGPrintln("    After begin"); DBGFlush();
 
   // Initialize the direction Pin

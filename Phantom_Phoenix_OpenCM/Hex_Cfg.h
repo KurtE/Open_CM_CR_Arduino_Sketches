@@ -85,15 +85,23 @@
 //[CM904 options]
 // Start off allowing up to two Port/Protocol/Baud combinations. 
 // Could in theory have 4, but for now just 2
+#if defined(__OPENCM904__)
 #define DXL_PORT_NAME					"3"
 #define DXL_PROTOCOL               		1                 	// See which protocol version is used in the Dynamixel
 #define DXL_BAUD						1000000				// Primary connection
 
-#define DXL2_PORT_NAME					nullptr				// use same port as primary
+#define DXL2_PORT_NAME			NULL				// use same port as primary
 #define DXL2_PROTOCOL                	2                 	// See which protocol version is used in the Dynamixel
 #define DXL2_BAUD						1000000				// Primary connection
+#elif defined(__OPENCR__)
+#define DXL_PORT_NAME          ""
+#define DXL_PROTOCOL                  1                   // See which protocol version is used in the Dynamixel
+#define DXL_BAUD            1000000       // Primary connection
 
-
+#define DXL2_PORT_NAME      ""       // use same port as primary
+#define DXL2_PROTOCOL                 2                   // See which protocol version is used in the Dynamixel
+#define DXL2_BAUD           1000000       // Primary connection
+#endif
 //--------------------------------------------------------------------
 //[Arbotix Pin Numbers]
 #define SOUND_PIN    6 //0xff        // Tell system we have no IO pin...

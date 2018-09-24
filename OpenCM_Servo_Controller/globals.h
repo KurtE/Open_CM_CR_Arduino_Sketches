@@ -12,6 +12,9 @@
 //=================================================================
 //#define DBGSerial     Serial2
 
+#ifndef BOARD_BUTTON_PIN
+#define BOARD_BUTTON_PIN BDPIN_PUSH_SW_1
+#endif
 
 #define REG_TABLE_SIZE      400 // Aways up the register table... 
 #define BUFFER_SIZE 1024      // Should be big enough
@@ -33,6 +36,8 @@
 #define RETURN_LEVEL         2
 #define RETURN_DELAY         0
 #define DYNAMIXEL_CHANNEL    0  // 0 = Serial1 and 1 = Serial3
+
+
 
 // Device register index
 enum {

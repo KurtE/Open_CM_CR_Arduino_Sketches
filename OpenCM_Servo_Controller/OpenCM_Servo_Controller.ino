@@ -24,7 +24,6 @@ void setup() {
   DBGSerial.println("OpenCM_Servo_Controller start"); DBGSerial.flush();
 #endif
   InitalizeHardwareAndRegisters();
-  uint32_t st = millis();
 
   Serial.begin(BAUDRATE);
 

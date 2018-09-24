@@ -178,14 +178,14 @@ class cm904Controller
     /* New-style constructor/setup */
     cm904Controller() {};
     void setup(int servo_cnt, const char *portName="1.0", uint8_t protocol=1, uint32_t baud=1000000); 
-    bool addPortProtocol(char *portName=nullptr, uint8_t protocol=1, uint32_t baud=1000000);
+    bool addPortProtocol(char *portName=NULL, uint8_t protocol=1, uint32_t baud=1000000);
 
     // Handle to port handler and packet handler;
     dynamixel::PortHandler *portHandler[MAX_PORT_PROTOL_HANDLERS];
     dynamixel::PacketHandler *packetHandler[MAX_PORT_PROTOL_HANDLERS];
     uint8_t port_packet_servo_count_[MAX_PORT_PROTOL_HANDLERS];
     // Add some support for finding servos and setting values outside of pose
-    uint8_t findServo(uint8_t id, servo_info_t *pservo=nullptr);  // if found returns the handler number, if not 0xff
+    uint8_t findServo(uint8_t id, servo_info_t *pservo=NULL);  // if found returns the handler number, if not 0xff
 
 //    uint8_t getServoByte(uint8_t id, uint8_t reg);
     uint32_t getServoValue(uint8_t id, servo_logical_reg_t reg);
@@ -237,4 +237,3 @@ class cm904Controller
 
 };
 #endif
-

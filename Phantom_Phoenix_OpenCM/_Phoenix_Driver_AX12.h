@@ -152,6 +152,12 @@ extern void TCWiggleServos();
 //--------------------------------------------------------------------
 void ServoDriver::Init(void) {
   // First lets get the actual servo positions for all of our servos...
+#ifdef BDPIN_DXL_PWR_EN
+  // OpenCR board
+  pinMode(BDPIN_DXL_PWR_EN, OUTPUT);
+  digitalWrite(BDPIN_DXL_PWR_EN, HIGH);
+#endif  
+  
   //  pinMode(0, OUTPUT);
   g_servos_torque_enabled = 0;
   g_servos_torque_errors = 0;
@@ -745,6 +751,3 @@ void EEPROMReadData(word wStart, uint8_t *pv, byte cnt) {
     *pv++ = EEPROM.read(wStart++);
   }
 }
-
-
-

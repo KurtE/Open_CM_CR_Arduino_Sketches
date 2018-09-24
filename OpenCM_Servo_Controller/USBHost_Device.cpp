@@ -23,7 +23,9 @@ enum {DXL_P2_ID_INDEX = 4, DXL_P2_LEN_L_INDEX, DXL_P2_LEN_H_INDEX, DXL_P2_INST_I
 
 
 /** Error Levels **/
+#ifndef ERR_NONE
 #define ERR_NONE                    0
+#endif
 #define ERR_VOLTAGE                 1
 #define ERR_ANGLE_LIMIT             2
 #define ERR_OVERHEATING             4
@@ -100,8 +102,8 @@ extern void CheckHardwareForLocalReadRequest(uint16_t register_id, uint16_t coun
 //-----------------------------------------------------------------------------
 void InitalizeHardwareAndRegisters() {
   DBGPrintln("InitializeHardwareAndRegisters");
-  pinMode(BOARD_LED_PIN, OUTPUT);
-  digitalWrite(BOARD_LED_PIN, HIGH);
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH);
 
   // initialize the Button pin
   pinMode(BOARD_BUTTON_PIN, INPUT_PULLDOWN);
@@ -688,7 +690,7 @@ void UpdateHardwareAfterLocalWrite(uint8_t register_id, uint8_t count_bytes)
   while (count_bytes) {
     switch (register_id) {
       case CM904_GREEN_LED:
-        digitalWriteFast(BOARD_LED_PIN, !g_controller_registers[CM904_GREEN_LED]);
+        digitalWriteFast(LED_BUILTIN, !g_controller_registers[CM904_GREEN_LED]);
         break;
       case CM485_LED1:
         digitalWriteFast(18, !g_controller_registers[CM485_LED1]);
@@ -819,9 +821,9 @@ void SaveEEPromSectionsLocalRegisters(void)
 void signal_abort(uint8_t error) {
   for (;;) {
     for (uint8_t i = 0; i < error; i++) {
-      digitalWrite(BOARD_LED_PIN, HIGH);
+      digitalWrite(LED_BUILTIN, HIGH);
       delay(100);
-      digitalWrite(BOARD_LED_PIN, LOW);
+      digitalWrite(LED_BUILTIN, LOW);
       delay(100);
     }
     delay(500);
