@@ -618,9 +618,10 @@ void PrintXBeeIDInfo(const char *pszID) {
   if (cbRead) {
     DBGSerial.print(pszID);
     DBGSerial.print(": ");
+    ab[cbRead] = 0; // end the string... 
     DBGSerial.write(ab);
-    DBGSerial.write(cbRead);
-    DBGSerial.println();
+    DBGSerial.print(" - ");
+    DBGSerial.println(cbRead, DEC);
   }
 }  
 

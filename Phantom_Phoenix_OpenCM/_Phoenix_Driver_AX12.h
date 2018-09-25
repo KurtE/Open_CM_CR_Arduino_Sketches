@@ -709,13 +709,13 @@ void TCWiggleServos()
     DBGSerial.println(servo_enabled, DEC);
     if (w != 0xffff) {
 
-      cm904.setServoValue(cPinTable[g_iIdleServoNum], cm904Controller::REG_TORQUE_ENABLE, 1);
+      cm904.setServoValue(cPinTable[iServo], cm904Controller::REG_TORQUE_ENABLE, 1);
 
-      cm904.setServoValue(cPinTable[g_iIdleServoNum], cm904Controller::REG_GOAL_POSITION, w-50);
+      cm904.setServoValue(cPinTable[iServo], cm904Controller::REG_GOAL_POSITION, w-50);
       delay(500);
-      cm904.setServoValue(cPinTable[g_iIdleServoNum], cm904Controller::REG_GOAL_POSITION, w+50);
+      cm904.setServoValue(cPinTable[iServo], cm904Controller::REG_GOAL_POSITION, w+50);
       delay(500);
-      cm904.setServoValue(cPinTable[g_iIdleServoNum], cm904Controller::REG_GOAL_POSITION, w);
+      cm904.setServoValue(cPinTable[iServo], cm904Controller::REG_GOAL_POSITION, w);
       delay(500);
     } else {
       delay(500);

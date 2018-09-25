@@ -14,9 +14,14 @@
 //=============================================================================
 // Options...
 //=============================================================================
-#if defined(__OPENCR__) || defined(__OPENCM904__)
+#if defined(__OPENCM904__)
 uint8_t port_handler_numbers[] = {1, 3};    // Setup to handle both ports of openCR
 #endif
+#if defined(__OPENCR__) 
+uint8_t port_handler_numbers[] = {3};    // Setup to handle both ports of openCR
+#define SERVO_POWER_ENABLE_PIN BDPIN_DXL_PWR_EN
+#endif
+
 #if defined(TEENSYDUINO) 
 uint8_t port_handler_numbers[] = {1};     // Default to Serial1
 #if defined(__MK66FX1M0__)
@@ -275,6 +280,12 @@ uint8_t        g_count_servos_found = 0;
 byte          g_bServoID;
 word          g_wServoGoalPos;
 word          g_wServoGoalSpeed;
+
+//====================================================================================================
+// forward reference
+//====================================================================================================
+extern bool IsValidServo(uint8_t servo_id);
+
 //====================================================================================================
 // Setup
 //====================================================================================================
@@ -1033,4 +1044,3 @@ void SetBaudRate()
   Serial.println("Doing new Servo Scan");
   FindServos();
 }
-
