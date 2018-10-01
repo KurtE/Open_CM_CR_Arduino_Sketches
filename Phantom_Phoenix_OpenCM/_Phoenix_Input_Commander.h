@@ -1,4 +1,4 @@
-//#define DEBUG_COMMANDER
+#define DEBUG_COMMANDER
 #ifdef USECOMMANDER
 
 //====================================================================
@@ -210,6 +210,7 @@ InputController  g_InputController;       // Our Input controller
 #endif
 
 
+bool g_fDebugXBEEOutput = false;
 
 static short   g_BodyYOffset; 
 static short   g_BodyYShift;
@@ -297,7 +298,7 @@ void CommanderInputController::ControlInput(void)
         g_InControlState.SelectedLeg = 0;   // Select leg 0 when we go into this mode. 
         g_InControlState.PrevSelectedLeg = 255;
 #ifdef DEBUG_SINGLELEG
-        Serial.println("Single Leg Mode");  
+        DBGSerial.println("Single Leg Mode");  
 #endif
       }
 #endif
@@ -485,11 +486,11 @@ void CommanderInputController::ControlInput(void)
       g_InControlState.SLLeg.z = ly; //Left Stick Up/Down
 #endif
 #ifdef DEBUG_SINGLELEG
-      Serial.print(g_InControlState.SLLeg.x, DEC);
-      Serial.print(",");
-      Serial.print(g_InControlState.SLLeg.y, DEC);
-      Serial.print(",");
-      Serial.println(g_InControlState.SLLeg.z, DEC);
+      DBGSerial.print(g_InControlState.SLLeg.x, DEC);
+      DBGSerial.print(",");
+      DBGSerial.print(g_InControlState.SLLeg.y, DEC);
+      DBGSerial.print(",");
+      DBGSerial.println(g_InControlState.SLLeg.z, DEC);
 #endif
       // Hold single leg in place
       if ((command.buttons & BUT_RT) && !(buttonsPrev & BUT_RT)) {
@@ -578,6 +579,8 @@ void CommanderTurnRobotOff(void)
 void CommanderInputController::ShowTerminalCommandList(void) 
 {
   DBGSerial.println("X - Show XBee Info");
+  DBGSerial.println("B - Toggle Show XBee Msgs");
+
 }
 //==============================================================================
 // ReadBytesUntil - as CM904 stream readBytes code is failing.
@@ -650,7 +653,9 @@ boolean CommanderInputController::ProcessTerminalCommand(byte *psz, byte bLen)
     }    
 
     return true;  
-  } 
+  } else if ((bLen == 1) && ((*psz == 'b') || (*psz == 'B'))) {
+    g_fDebugXBEEOutput = !g_fDebugXBEEOutput;
+  }
   return false;
 
 }
@@ -689,6 +694,7 @@ Commander::Commander(){
   index = -1;
 }
 
+
 //==============================================================================
 // Commander::begin 
 //==============================================================================
@@ -706,37 +712,37 @@ void Commander::begin(unsigned long baud){
   XBeeSerial.begin(baud);
   pinMode(USER, OUTPUT);
 #ifdef CHECK_AND_CONFIG_XBEE
-  Serial.println("Check xbee config");
+  DBGSerial.println("Check xbee config");
   while (XBeeSerial.available()) XBeeSerial.read();
   // First lets see if we have a real short command time
   delay(15);  // see if we have fast command mode enabled.
   XBeeSerial.print("+++"); 
   XBeeSerial.flush();
   XBeeSerial.setTimeout(20);  // give a little extra time
-  Serial.println("After set timeout");
+  DBGSerial.println("After set timeout");
   if (ReadBytesUntil(20, '\r', ab, 10) > 0) {
     XBeeSerial.println("ATCN");	          // and exit command mode
-    Serial.println("+++ returned data quickly");
+    DBGSerial.println("+++ returned data quickly");
     return;  // bail out quick
   }
-  Serial.println("After readbytesUntil");  
+  DBGSerial.println("After readbytesUntil");  
   // Else see if maybe properly configured but not quick command mode.
   delay(1100);
-  Serial.println("XBee try long delay");
+  DBGSerial.println("XBee try long delay");
   while (XBeeSerial.available()) XBeeSerial.read();
   XBeeSerial.print("+++");
   XBeeSerial.setTimeout(1100);  // little over a second
   if (ReadBytesUntil(1100, '\r', ab, 10) > 0) {
     // Note: we could check a few more things here if we run into issues.  Like: MY!=0
     // or MY != DL
-    Serial.println("XBee long dealy worked set short delay ");
+    DBGSerial.println("XBee long dealy worked set short delay ");
     XBeeSerial.println("ATGT 5");              // Set a quick command mode
     XBeeSerial.println("ATWR");	          // Write out the changes
     XBeeSerial.println("ATCN");	          // and exit command mode
     return;  // It is already at 38400, so assume already init.
   }
   // Failed, so check to see if we can communicate at 9600
-  Serial.println("XBee failed to read at 38400 try 9600");
+  DBGSerial.println("XBee failed to read at 38400 try 9600");
   XBeeSerial.end();
   XBeeSerial.begin(9600);
   while (XBeeSerial.available()) XBeeSerial.read();
@@ -745,7 +751,7 @@ void Commander::begin(unsigned long baud){
   XBeeSerial.print("+++");
   if (ReadBytesUntil(1100, '\r', ab, 10) == 0) {
     // failed blink fast
-    Serial.println("XBee failed configure");
+    DBGSerial.println("XBee failed configure");
 
     for(int i=0;i<50;i++) {
       digitalWrite(USER, !digitalRead(USER));
@@ -827,7 +833,7 @@ int Commander::ReadMsgs(){
           ext = vals[5];
 #ifdef DEBUG_COMMANDER
 #ifdef DBGSerial  
-          if (g_fDebugOutput) {
+          if (g_fDebugXBEEOutput) {
             DBGSerial.print(buttons, HEX);
             DBGSerial.print(" : ");
             DBGSerial.print(rightV, DEC);

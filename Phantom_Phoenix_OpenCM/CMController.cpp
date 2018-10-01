@@ -1,5 +1,7 @@
 #include "CMController.h"
 
+// BUGBUG assuming Hex currently to define if H
+#include "Hex_Cfg.h"
 // Define quick and dirty translation for different servo messages.
 const static uint8_t g_axmx_regs[] = {AX_GOAL_POSITION_L, AX_TORQUE_ENABLE, AX_ID, AX_LED, AX_PRESENT_POSITION_L, AX_PRESENT_VOLTAGE};
 const static uint8_t g_axmx_reg_len[] = {2, 1, 1, 1, 2, 1};
@@ -72,7 +74,7 @@ void cm904Controller::setup(int servo_cnt, const char *portName, uint8_t protoco
 }
 
 // Allow us to add Port/Protocol pairs to the list... 
-bool cm904Controller::addPortProtocol(char *portName, uint8_t protocol, uint32_t baud) {
+bool cm904Controller::addPortProtocol(const char *portName, uint8_t protocol, uint32_t baud) {
   if ((count_handlers_+1) >= MAX_PORT_PROTOL_HANDLERS) return false;
 
   if (portName != NULL) {
@@ -137,14 +139,14 @@ uint8_t cm904Controller::findServo(uint8_t id, servo_info_t *pservo) { // if fou
         //XL_320(350), XL430_W250(1060), XM430_W210(1030), ...
         // Maybe over time should look at how some of the others than AX12/18 and XL430 work
         pservo->type = (servo_model > 1000)? SERVO_XL430 : SERVO_AXMX;
-        Serial.print("Servo found:" );
-        Serial.print(id, DEC);
-        Serial.print(" handler: ");
-        Serial.print(handler, DEC);
-        Serial.print(" Type: ");
-        Serial.print(pservo->type);
-        Serial.print(" Count on handler: ");
-        Serial.println(port_packet_servo_count_[pservo->handler], DEC);
+        DBGSerial.print("Servo found:" );
+        DBGSerial.print(id, DEC);
+        DBGSerial.print(" handler: ");
+        DBGSerial.print(handler, DEC);
+        DBGSerial.print(" Type: ");
+        DBGSerial.print(pservo->type);
+        DBGSerial.print(" Count on handler: ");
+        DBGSerial.println(port_packet_servo_count_[pservo->handler], DEC);
       }
       return handler;
     }
@@ -186,7 +188,7 @@ uint32_t cm904Controller::getServoPosition(uint8_t index, uint8_t &perror) {
 void cm904Controller::readPose() {
   servo_info_t * servo = servos_;
   uint8_t error;
-  Serial.print("ReadPose:");
+  DBGSerial.print("ReadPose:");
   for (int i = 0; i < poseSize; i++) {
     // Read present position
     uint16_t pose = getServoPosition(i, error) << BIOLOID_SHIFT;
@@ -202,13 +204,13 @@ void cm904Controller::readPose() {
     if (error != COMM_SUCCESS)
       pose = 0xffff;
     servo->pose = pose;
-    Serial.print(" ");
-    Serial.print(servo->id, DEC);
-    Serial.print(":");
-    Serial.print(pose >> BIOLOID_SHIFT, DEC);
+    DBGSerial.print(" ");
+    DBGSerial.print(servo->id, DEC);
+    DBGSerial.print(":");
+    DBGSerial.print(pose >> BIOLOID_SHIFT, DEC);
     servo++;
   }
-  Serial.println();
+  DBGSerial.println();
 }
 
 #if 0
@@ -229,27 +231,27 @@ uint16_t cm904Controller::getServoWord(uint8_t id, uint8_t reg) {
 #endif
 uint32_t cm904Controller::getServoValue(uint8_t id, servo_logical_reg_t reg) {
   servo_info_t *servo = cm904Controller::mapIDtoServoInfo(id);
-  Serial.print("Get Servo Value, ID: ");
-  Serial.print(id, DEC);
+  DBGSerial.print("Get Servo Value, ID: ");
+  DBGSerial.print(id, DEC);
 
   uint8_t servo_reg;
   uint8_t servo_reg_len;
   if (!servo) return (uint32_t)-1;
   if (servo->type == SERVO_XL430) {
-    Serial.print(" XL type");
+    DBGSerial.print(" XL type ");
     servo_reg = g_xl430_regs[(uint8_t)reg];
     servo_reg_len = g_xl430_reg_len[(uint8_t)reg];
   } else {
-    Serial.print(" AX type");
+    DBGSerial.print(" AX type ");
     servo_reg = g_axmx_regs[(uint8_t)reg];
     servo_reg_len = g_axmx_reg_len[(uint8_t)reg];
   }
 
   if (servo->handler == 0xff) return (uint32_t)-1;
-  Serial.print(" REG:");
-  Serial.print(servo_reg, DEC);
-  Serial.print(" Size: ");
-  Serial.print(servo_reg_len, DEC);
+  DBGSerial.print(" REG:");
+  DBGSerial.print(servo_reg, DEC);
+  DBGSerial.print(" Size: ");
+  DBGSerial.print(servo_reg_len, DEC);
   // Now lets switch depending on size...
   uint8_t val;
   uint16_t val2;
@@ -260,29 +262,29 @@ uint32_t cm904Controller::getServoValue(uint8_t id, servo_logical_reg_t reg) {
     default:
       ret = packetHandler[servo->handler]->read1ByteTxRx(portHandler[servo->handler], id, servo_reg, &val, &error); 
       if ((ret != COMM_SUCCESS) || (error != 0)) break;
-      Serial.print(" Val: ");
-      Serial.println(val, DEC);
+      DBGSerial.print(" Val: ");
+      DBGSerial.println(val, DEC);
       return val;
       break;
     case 2:
       ret = packetHandler[servo->handler]->read2ByteTxRx(portHandler[servo->handler], id, servo_reg, &val2, &error); 
       if ((ret != COMM_SUCCESS) || (error != 0)) break;
-      Serial.print(" Val: ");
-      Serial.println(val2, DEC);
+      DBGSerial.print(" Val: ");
+      DBGSerial.println(val2, DEC);
       return val2;
       break;
     case 4:
       ret = packetHandler[servo->handler]->read4ByteTxRx(portHandler[servo->handler], id, servo_reg, &val4, &error); 
       if ((ret != COMM_SUCCESS) || (error != 0)) break;
-      Serial.print(" Val: ");
-      Serial.println(val4, DEC);
+      DBGSerial.print(" Val: ");
+      DBGSerial.println(val4, DEC);
       return val4;
       break;
   }
-  Serial.print(" Error: ");
-  Serial.print(error, HEX);
-  Serial.print(" Ret: ");
-  Serial.println(ret, HEX);
+  DBGSerial.print(" Error: ");
+  DBGSerial.print(error, HEX);
+  DBGSerial.print(" Ret: ");
+  DBGSerial.println(ret, HEX);
   return (uint32_t)-1;
 }
 

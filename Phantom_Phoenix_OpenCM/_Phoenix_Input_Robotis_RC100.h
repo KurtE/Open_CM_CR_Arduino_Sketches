@@ -461,10 +461,10 @@ int RobotisRC100::ReadMsgs() {
   uint16_t new_buttons = 0;
   while (Serial2.available() > 0) {
     uint8_t ch = Serial2.read();
-/*    Serial.print(ch, HEX);
-    Serial.print("-");
-    Serial.print(input_state, DEC);
-    Serial.print(" "); */
+/*    DBGSerial.print(ch, HEX);
+    DBGSerial.print("-");
+    DBGSerial.print(input_state, DEC);
+    DBGSerial.print(" "); */
     switch (input_state) {
       case 0:
         if (ch == 0xff)  input_state = 1;

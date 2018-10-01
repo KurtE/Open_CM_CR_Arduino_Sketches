@@ -106,6 +106,8 @@ cm904Controller cm904 = cm904Controller();  // Use two phase initialization.
 uint32_t g_servos_torque_enabled = 0;    // Are the servos in a free state?
 uint32_t g_servos_torque_errors = 0;    //
 
+boolean g_servos_init = false;      // Did the servos init?
+
 //============================================================================================
 // Lets try rolling our own GPSequence code here...
 #define GPSEQ_EEPROM_START 0x40       // Reserve the first 64 bytes of EEPROM for other stuff...
@@ -150,13 +152,19 @@ extern void TCWiggleServos();
 //--------------------------------------------------------------------
 //Init
 //--------------------------------------------------------------------
-void ServoDriver::Init(void) {
+boolean ServoDriver::Init(void) {
   // First lets get the actual servo positions for all of our servos...
-#ifdef BDPIN_DXL_PWR_EN
+#if defined(__OPENCR__) 
   // OpenCR board
   pinMode(BDPIN_DXL_PWR_EN, OUTPUT);
   digitalWrite(BDPIN_DXL_PWR_EN, HIGH);
 #endif  
+
+  // Make sure we preload our voltage stuff...
+#if defined(cVoltagePin) || defined(__OPENCR__) 
+  for (byte i = 0; i < 10; i++)
+    GetBatteryVoltage();  // init the voltage pin
+#endif
   
   //  pinMode(0, OUTPUT);
   g_servos_torque_enabled = 0;
@@ -166,6 +174,26 @@ void ServoDriver::Init(void) {
 
 
   cm904.poseSize = NUMSERVOS;
+  return InitServos();
+
+}
+
+//--------------------------------------------------------------------
+//InitServos - Init the Servos
+//--------------------------------------------------------------------
+boolean ServoDriver::InitServos(void) {
+#ifdef DBGSerial
+  DBGSerial.println("ServoDriver::InitServos called");
+#endif
+  if (ServosInit()) 
+    return true;    // Hopefully only need to do once...
+
+  // First lets get the actual servo positions for all of our servos...
+#if defined(cVoltagePin) || defined(__OPENCR__) 
+  if (GetBatteryVoltage() < cTurnOffVol) 
+    return false;
+#endif  
+
   #ifndef DEFAULT_FRAME_TIME_MS
   #define DEFAULT_FRAME_TIME_MS 10
   #endif
@@ -218,10 +246,6 @@ void ServoDriver::Init(void) {
     }
   }
 
-#ifdef cVoltagePin
-  for (byte i = 0; i < 8; i++)
-    GetBatteryVoltage();  // init the voltage pin
-#endif
 
   // Currently have Turret pins not necessarily same as numerical order so
   // Maybe should do for all pins and then set the positions by index instead
@@ -231,11 +255,31 @@ void ServoDriver::Init(void) {
   cm904.setId(FIRSTTURRETPIN + 1, cTurretTiltPin);
 #endif
 
+  // If we are missing many servos return false
+  if (count_missing < 5) g_servos_init = true;  // maybe we should go less than this...
+
+
   // Added - try to speed things up later if we do a query...
   //cm904.setRegOnAllServos(AX_RETURN_DELAY_TIME, 0);  // tell servos to give us back their info as quick as they can...
-
+  return g_servos_init;
 }
 
+//--------------------------------------------------------------------
+// ServosInit - Did our servos init?  
+//--------------------------------------------------------------------
+boolean ServoDriver::ServosInit(void) {
+  return g_servos_init;
+}
+
+//--------------------------------------------------------------------
+// ServoPowerWentLow - Did our servos init?  
+//--------------------------------------------------------------------
+void ServoDriver::ServoPowerWentLow(void) {
+#ifdef DBGSerial
+  DBGSerial.println("ServoDriver::ServoPowerWentLow");
+#endif
+  g_servos_init = false;
+}
 
 //--------------------------------------------------------------------
 //GetBatteryVoltage - Maybe should try to minimize when this is called
@@ -262,7 +306,10 @@ word ServoDriver::GetBatteryVoltage(void) {
   return ((long)((long)g_wVoltageSum * 125 * (CVADR1 + CVADR2)) / (long)(2048 * (long)CVADR2));
 #endif
 }
-
+#elif defined(__OPENCR__) 
+word ServoDriver::GetBatteryVoltage(void) {
+  return (word)(getPowerInVoltage()*100.0);
+}
 #else
 word g_wLastVoltage = 0xffff;    // save the last voltage we retrieved...
 byte g_bLegVoltage = 0;		// what leg did we last check?
@@ -499,8 +546,8 @@ void  ServoDriver::BackgroundProcess(void)
     DebugToggle(DEBUG_PIN_BACKGROUND);
 
 #ifdef cTurnOffVol          // only do if we a turn off voltage is defined
-#ifndef cVoltagePin         // and we are not doing AtoD type of conversion...
-    int iTimeToNextInterpolate =
+#if ! ( defined(cTurnOffVol) || defined (__OPENCR__) )   
+    int iTimeToNextInterpolate = 0;
 #endif
 #endif
       cm904.interpolateStep(false);    // Do our background stuff...
@@ -508,7 +555,7 @@ void  ServoDriver::BackgroundProcess(void)
     // Hack if we are not interpolating, maybe try to get voltage.  This will acutally only do this
     // a few times per second.
 #ifdef cTurnOffVol          // only do if we a turn off voltage is defined
-#ifndef cVoltagePin         // and we are not doing AtoD type of conversion...
+#if ! ( defined(cTurnOffVol) || defined (__OPENCR__) )   
     if (iTimeToNextInterpolate > VOLTAGE_MIN_TIME_UNTIL_NEXT_INTERPOLATE )      // At least 4ms until next interpolation.  See how this works...
       GetBatteryVoltage();
 #endif
@@ -558,10 +605,17 @@ boolean ServoDriver::ProcessTerminalCommand(byte *psz, byte bLen)
 #ifdef cVoltagePin
     DBGSerial.print("Raw Analog: ");
     DBGSerial.println(analogRead(cVoltagePin));
+#elif defined(__OPENCR__)
+    DBGSerial.print("OpenCR Voltage: ");
+    DBGSerial.println((double)getPowerInVoltage());
 #endif
 
     DBGSerial.print("From Servo 2: ");
-    DBGSerial.println(cm904.getServoValue (2, cm904Controller::REG_VOLTAGE), DEC);
+    uint32_t servo_value = cm904.getServoValue (2, cm904Controller::REG_VOLTAGE);
+    if (servo_value != (uint32_t)-1) 
+      DBGSerial.println(servo_value, DEC);
+    else
+      DBGSerial.println("** Failed **");
   }
 
   if ((bLen == 1) && ((*psz == 't') || (*psz == 'T'))) {

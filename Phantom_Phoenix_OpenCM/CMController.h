@@ -178,7 +178,7 @@ class cm904Controller
     /* New-style constructor/setup */
     cm904Controller() {};
     void setup(int servo_cnt, const char *portName="1.0", uint8_t protocol=1, uint32_t baud=1000000); 
-    bool addPortProtocol(char *portName=NULL, uint8_t protocol=1, uint32_t baud=1000000);
+    bool addPortProtocol(const char *portName=NULL, uint8_t protocol=1, uint32_t baud=1000000);
 
     // Handle to port handler and packet handler;
     dynamixel::PortHandler *portHandler[MAX_PORT_PROTOL_HANDLERS];

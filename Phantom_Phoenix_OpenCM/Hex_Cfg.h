@@ -79,13 +79,13 @@
 //[SERIAL CONNECTIONS]
 
 //====================================================================
-#define XBeeSerial Serial2
 #define XBEE_BAUD        38400
 
 //[CM904 options]
 // Start off allowing up to two Port/Protocol/Baud combinations. 
 // Could in theory have 4, but for now just 2
 #if defined(__OPENCM904__)
+#define XBeeSerial Serial2
 #define DXL_PORT_NAME					"3"
 #define DXL_PROTOCOL               		1                 	// See which protocol version is used in the Dynamixel
 #define DXL_BAUD						1000000				// Primary connection
@@ -93,7 +93,14 @@
 #define DXL2_PORT_NAME			NULL				// use same port as primary
 #define DXL2_PROTOCOL                	2                 	// See which protocol version is used in the Dynamixel
 #define DXL2_BAUD						1000000				// Primary connection
+
+//[OpenCM pins Numbers]
+#define SOUND_PIN    6 //0xff        // Tell system we have no IO pin...
+#define USER 14                        // CM904.....
+
+
 #elif defined(__OPENCR__)
+#define XBeeSerial Serial1
 #define DXL_PORT_NAME          ""
 #define DXL_PROTOCOL                  1                   // See which protocol version is used in the Dynamixel
 #define DXL_BAUD            1000000       // Primary connection
@@ -101,11 +108,17 @@
 #define DXL2_PORT_NAME      ""       // use same port as primary
 #define DXL2_PROTOCOL                 2                   // See which protocol version is used in the Dynamixel
 #define DXL2_BAUD           1000000       // Primary connection
+
+//[OpenCR Pin Numbers]
+#define SOUND_PIN    BDPIN_BUZZER     // OpenCR has buzzer on board
+#define USER  BDPIN_LED_USER_1        // First user LED on OPENCR
+//#define cVoltagePin  BDPIN_BAT_PWR_ADC  // They have built in voltage divider
+#define cTurnOffVol  1000     // 10v
+#define cTurnOnVol   1100     // 11V - optional part to say if voltage goes back up, turn it back on...
+
 #endif
 //--------------------------------------------------------------------
 //[Arbotix Pin Numbers]
-#define SOUND_PIN    6 //0xff        // Tell system we have no IO pin...
-#define USER 14                        // CM904.....
 
 // Define Analog pin and minimum voltage that we will allow the servos to run
 //#define cVoltagePin  7      // Use our Analog pin jumper here...

@@ -794,9 +794,9 @@ void setup(){
   g_InControlState.TurretTiltAngle1 = cTurretTiltInit;    // the tile for the turret
 #endif
 
-  Serial.println("Before Input Controller Init");
+  DBGSerial.println("Before Input Controller Init");
   g_InputController.Init();
-  Serial.println("After Input Controller Init");
+  DBGSerial.println("After Input Controller Init");
   // Servo Driver
   ServoMoveTime = 150;
   g_InControlState.fRobotOn = 0;
@@ -838,7 +838,7 @@ void loop(void)
   GaitSeq();
 
   DoBackgroundProcess();
-
+  //Serial.println("Loop: After GaitSeq");
   //Balance calculations
   TotalTransX = 0;     //reset values used for calculation of balance
   TotalTransZ = 0;
@@ -957,6 +957,7 @@ void loop(void)
     // before we wait and only have the termination information to output after the wait.  That way we hopefully
     // be more accurate with our timings...
     DoBackgroundProcess();
+    //Serial.println("Loop: Before StartUpdateServos");
     StartUpdateServos();
 
     // See if we need to sync our processor with the servo driver while walking to ensure the prev is completed 
@@ -1017,6 +1018,7 @@ void loop(void)
 #endif
     // Only do commit if we are actually doing something...
     DebugToggle(DEBUG_PIN_COMMIT);
+    //Serial.println("Loop: Before Before Commit");
     g_ServoDriver.CommitServoDriver(ServoMoveTime);
 
 
@@ -1025,8 +1027,10 @@ void loop(void)
     //Turn the bot off - May need to add ajust here...
     if (g_InControlState.fPrev_RobotOn || (AllDown= 0)) {
       ServoMoveTime = 600;
+      //Serial.println("Loop: Before StartUpdateServos OFF");
       StartUpdateServos();
       g_ServoDriver.CommitServoDriver(ServoMoveTime);
+      //Serial.println("Loop: After Commit OFF");
       MSound(3, 100, 2500, 80, 2250, 60, 2000);
 #ifdef USEXBEE            
       XBeePlaySounds(3, 100, 2500, 80, 2250, 60, 2000);
@@ -1114,6 +1118,7 @@ boolean CheckVoltage() {
   //    Voltage = analogRead(cVoltagePin); // Battery voltage 
   //    Voltage = ((long)Voltage*1955)/1000;
   Voltage = g_ServoDriver.GetBatteryVoltage();
+  //Serial.printf("GetBatterVoltage %d %d %d %d\n", Voltage,cTurnOffVol, cTurnOnVol, g_fLowVoltageShutdown);
 
   // BUGBUG:: if voltage is 0 it failed to retrieve don't hang program...
   //    if (!Voltage)
@@ -1142,6 +1147,7 @@ boolean CheckVoltage() {
       g_fLowVoltageShutdown = 1;
       s_bLVBeepCnt = 0;    // how many times we beeped...
       g_InControlState.fRobotOn = false;
+      g_ServoDriver.ServoPowerWentLow();
     }
 #ifdef cTurnOnVol
   } 
@@ -1151,6 +1157,7 @@ boolean CheckVoltage() {
     DBGSerial.println(Voltage, DEC);
 #endif          
     g_fLowVoltageShutdown = 0;
+     g_ServoDriver.InitServos();  // Lets init the servos
 
 #endif      
   } 
@@ -2552,20 +2559,3 @@ void UpdateInitialPosAndAngCmd(byte *pszCmdLine) {
 #endif
 
 #endif
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

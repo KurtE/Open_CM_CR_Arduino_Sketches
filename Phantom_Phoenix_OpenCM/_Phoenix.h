@@ -232,7 +232,10 @@ INCONTROLSTATE;
 //==============================================================================
 class ServoDriver {
 public:
-  void Init(void);
+  boolean Init(void);
+  boolean InitServos();
+  boolean inline ServosInit();
+  void    ServoPowerWentLow();
 
   word GetBatteryVoltage(void);
 
