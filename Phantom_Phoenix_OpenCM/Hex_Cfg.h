@@ -50,11 +50,17 @@
 #define DEBUG_IOPINS
 
 #ifdef DEBUG_IOPINS
+#if defined(__OPENCM904__)
 #define DEBUG_PIN_STEP          18
 #define DEBUG_PIN_COMMIT        19
 #define DEBUG_PIN_BACKGROUND    20
 #define DEBUG_PIN_BEGIN_UPDATE  21
-
+#elif defined(__OPENCR__)
+#define DEBUG_PIN_STEP          BDPIN_LED_USER_1
+#define DEBUG_PIN_COMMIT        BDPIN_LED_USER_2
+#define DEBUG_PIN_BACKGROUND    BDPIN_LED_USER_3
+#define DEBUG_PIN_BEGIN_UPDATE  BDPIN_LED_USER_4
+#endif
 #define DebugToggle(pin)  {digitalWrite(pin, !digitalRead(pin));}
 #define DebugWrite(pin, state) {digitalWrite(pin, state);}
 #else
