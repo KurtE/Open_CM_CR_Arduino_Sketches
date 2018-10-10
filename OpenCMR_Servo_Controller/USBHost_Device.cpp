@@ -106,22 +106,34 @@ void InitalizeHardwareAndRegisters() {
   digitalWrite(LED_BUILTIN, HIGH);
 
   // initialize the Button pin
-  pinMode(BOARD_BUTTON_PIN, INPUT_PULLDOWN);
+  pinMode(IOPIN_PUSH_SW_1, INPUT_PULLDOWN);
+  pinMode(IOPIN_PUSH_SW_2, INPUT_PULLDOWN);
+#ifdef IOPIN_PUSH_SW_3
+  pinMode(IOPIN_PUSH_SW_3, INPUT_PULLDOWN);
+#endif
 
-  // OpenCM485 expansion 
-  pinMode(16, INPUT_PULLDOWN);
-  pinMode(17, INPUT_PULLDOWN);
-  pinMode(18, OUTPUT);
-  digitalWrite(18, HIGH);
-  pinMode(19, OUTPUT);
-  digitalWrite(19, HIGH);
-  pinMode(20, OUTPUT);
-  digitalWrite(20, HIGH);
+  pinMode(IOPIN_LED_USER_1, OUTPUT);
+  digitalWrite(IOPIN_LED_USER_1, HIGH);
+  pinMode(IOPIN_LED_USER_2, OUTPUT);
+  digitalWrite(IOPIN_LED_USER_2, HIGH);
+  pinMode(IOPIN_LED_USER_3, OUTPUT);
+  digitalWrite(IOPIN_LED_USER_3, HIGH);
+
+#ifdef __OPENCR__
+  pinMode(IOPIN_PUSH_SW_1, INPUT_PULLDOWN);
+  pinMode(IOPIN_PUSH_SW_2, INPUT_PULLDOWN);
+
+  pinMode(IOPIN_LED_USER_4, OUTPUT);
+  digitalWrite(IOPIN_LED_USER_4, HIGH);
+
+  pinMode(IOPIN_DXL_PWR_EN, OUTPUT);
+  digitalWrite(IOPIN_DXL_PWR_EN, HIGH);    // default to power on... to being
+#endif  
 
   // Initialize the register table. 
   InitalizeRegisterTable();
 
-  if (!DXL_BUSS.openPort(g_controller_registers[CM904_DYNAMIXEL_CHANNEL], g_controller_registers[CM904_P2_BAUD_RATE_BUS])) {
+  if (!DXL_BUSS.openPort(g_controller_registers[REG_M_DYNAMIXEL_CHANNEL], g_controller_registers[REG_MR_P2_BAUD_RATE_BUS])) {
     signal_abort(1);
   }
 
@@ -132,6 +144,7 @@ void InitalizeHardwareAndRegisters() {
 //=========================================================================
 bool ProcessUSBInputData() {
   bool we_did_something = false;
+  DBGDigitalWrite(2, HIGH);
   // Main loop, lets loop through reading any data that is coming in from the USB
 #ifdef DBGSerial
   uint8_t debug_output_cnt = 0;
@@ -141,11 +154,13 @@ bool ProcessUSBInputData() {
     we_did_something = true;
     uint8_t ch = Serial.read();
 #ifdef DBGSerial
-    DBGSerial.print(ch, HEX);
-    if (++debug_output_cnt == 16) {
-      debug_output_cnt = 0;
-      DBGSerial.println();
-    } else     DBGSerial.print(" ");
+    if (print_debug_outputs) {
+      DBGSerial.print(ch, HEX);
+      if (++debug_output_cnt == 16) {
+        debug_output_cnt = 0;
+        DBGSerial.println();
+      } else     DBGSerial.print(" ");
+    }
 #endif    
     last_message_time = micros();
     switch (dxl_usb_input_state) {
@@ -185,7 +200,7 @@ bool ProcessUSBInputData() {
           // Looks like a protocol 2 packet
           dxl_usb_input_state = DXL_P2_ID;
 
-        } else if (from_usb_buffer[PACKET_ID] == g_controller_registers[CM904_ID] || from_usb_buffer[PACKET_ID] == AX_ID_BROADCAST ) {
+        } else if (from_usb_buffer[PACKET_ID] == g_controller_registers[REG_MR_ID] || from_usb_buffer[PACKET_ID] == AX_ID_BROADCAST ) {
           if (packet_length > 1 && packet_length < (AX_SYNC_READ_MAX_DEVICES + 4)) { // reject message if too short or too big for from_usb_buffer buffer
             dxl_usb_input_state = PACKET_INSTRUCTION;
           } else {
@@ -203,15 +218,15 @@ bool ProcessUSBInputData() {
         if (from_usb_buffer[PACKET_INSTRUCTION] == DXL_SYNC_READ) {
           dxl_usb_input_state = AX_GET_PARAMETERS;
           dxl_protocol1_checksum =  from_usb_buffer[PACKET_ID] + DXL_SYNC_READ + from_usb_buffer[PACKET_LENGTH];
-        } else if (from_usb_buffer[PACKET_ID] == g_controller_registers[CM904_ID]) {
+        } else if (from_usb_buffer[PACKET_ID] == g_controller_registers[REG_MR_ID]) {
           if (from_usb_buffer[PACKET_INSTRUCTION] == DXL_PING) {
             dxl_usb_input_state = AX_SEARCH_PING;
           } else if (from_usb_buffer[PACKET_INSTRUCTION] == DXL_READ_DATA) {
             dxl_usb_input_state = AX_GET_PARAMETERS;
-            dxl_protocol1_checksum = g_controller_registers[CM904_ID] + DXL_READ_DATA + from_usb_buffer[PACKET_LENGTH];
+            dxl_protocol1_checksum = g_controller_registers[REG_MR_ID] + DXL_READ_DATA + from_usb_buffer[PACKET_LENGTH];
           } else if (from_usb_buffer[PACKET_INSTRUCTION] == DXL_WRITE_DATA) {
             dxl_usb_input_state = AX_GET_PARAMETERS;
-            dxl_protocol1_checksum = g_controller_registers[CM904_ID] + DXL_WRITE_DATA + from_usb_buffer[PACKET_LENGTH];
+            dxl_protocol1_checksum = g_controller_registers[REG_MR_ID] + DXL_WRITE_DATA + from_usb_buffer[PACKET_LENGTH];
           } else {
             passBufferedDataToServos();
           }
@@ -222,7 +237,7 @@ bool ProcessUSBInputData() {
 
       case AX_SEARCH_PING:
         from_usb_buffer[5] = ch;
-        if (((g_controller_registers[CM904_ID] + 2 + DXL_PING + from_usb_buffer[5]) % 256) == 255) {
+        if (((g_controller_registers[REG_MR_ID] + 2 + DXL_PING + from_usb_buffer[5]) % 256) == 255) {
           sendProtocol1StatusPacket(ERR_NONE, NULL, 0);
           dxl_usb_input_state = AX_SEARCH_FIRST_FF;
         } else {
@@ -274,7 +289,7 @@ bool ProcessUSBInputData() {
         dxl_usb_input_state = DXL_P2_LENGTH_L;
 
         // Check to see if we should start sending out the data here.
-        if (ch != g_controller_registers[CM904_ID] ) {
+        if (ch != g_controller_registers[REG_MR_ID] ) {
           pass_bytes(from_usb_buffer_count);
         }
         break;
@@ -286,7 +301,7 @@ bool ProcessUSBInputData() {
       case DXL_P2_LENGTH_H:
         from_usb_buffer[from_usb_buffer_count++] = ch;
         packet_length = (from_usb_buffer[DXL_P2_LEN_H_INDEX] << 8) + from_usb_buffer[DXL_P2_LEN_L_INDEX];
-        if (from_usb_buffer[DXL_P2_ID_INDEX] == g_controller_registers[CM904_ID]  ) {
+        if (from_usb_buffer[DXL_P2_ID_INDEX] == g_controller_registers[REG_MR_ID]  ) {
           if (packet_length > 2 && packet_length < (sizeof(from_usb_buffer)-7)) { // reject message if too short or too big for from_usb_buffer buffer
             dxl_usb_input_state = DXL_P2_INSTRUCTION;
           } else {
@@ -341,16 +356,20 @@ bool ProcessUSBInputData() {
   }
   // Timeout on state machine while waiting on further USB data
   if (dxl_usb_input_state != AX_SEARCH_FIRST_FF) {
-    if ((micros() - last_message_time) > (20 * g_controller_registers[CM904_RETURN_DELAY_TIME])) {
+    if ((micros() - last_message_time) > (20 * g_controller_registers[REG_MR_RETURN_DELAY_TIME])) {
       pass_bytes(from_usb_buffer_count);
       dxl_usb_input_state = AX_SEARCH_FIRST_FF;
     }
   }
 #ifdef DBGSerial
-  if (debug_output_cnt) DBGSerial.println();
+  if (print_debug_outputs) {
+    if (debug_output_cnt) DBGSerial.println();
+  }
 #endif
   // Make sure we are back in input mode from the AX_BUSS
   DXL_BUSS.switchToInput();
+  DBGDigitalWrite(2, LOW);
+
   return we_did_something;
 
 }
@@ -413,10 +432,10 @@ void MaybeFlushUSBOutputData()
 //-----------------------------------------------------------------------------
 void sendProtocol1StatusPacket(uint8_t err, uint8_t* data, uint8_t count_bytes) {
 
-  uint16_t checksum = g_controller_registers[CM904_ID] + 2 + count_bytes + err;
+  uint16_t checksum = g_controller_registers[REG_MR_ID] + 2 + count_bytes + err;
   Serial.write(0xff);
   Serial.write(0xff);
-  Serial.write(g_controller_registers[CM904_ID]);
+  Serial.write(g_controller_registers[REG_MR_ID]);
   Serial.write(2 + count_bytes);
   Serial.write(err);
   for (uint8_t i = 0; i < count_bytes; i++) {
@@ -427,11 +446,13 @@ void sendProtocol1StatusPacket(uint8_t err, uint8_t* data, uint8_t count_bytes) 
   g_data_output_to_usb = false;
   Serial.flush();
   #ifdef DBGSerial
-  DBGSerial.printf("\nsendProtocol1StatusPacket err:%x Count: %d ", err, count_bytes);
-  for (uint8_t i=0; i < count_bytes; i++) {
-    DBGSerial.printf(" %02x", data[i]);
+  if (print_debug_outputs) {
+    DBGSerial.printf("\nsendProtocol1StatusPacket err:%x Count: %d ", err, count_bytes);
+    for (uint8_t i=0; i < count_bytes; i++) {
+      DBGSerial.printf(" %02x", data[i]);
+    }
+    DBGSerial.println();
   }
-  DBGSerial.println();
   #endif   
 }
 
@@ -453,7 +474,7 @@ void sendProtocol2StatusPacket(uint8_t err, uint8_t* data, uint16_t count_bytes)
   *packet++ = 0xFF;   // 1
   *packet++ = 0xFd;   // 2
   *packet++ = 0;      // 3
-  *packet++ = g_controller_registers[CM904_ID];     // 4
+  *packet++ = g_controller_registers[REG_MR_ID];     // 4
   *packet++ = (count_bytes + 4) & 0xff; // 5 LSB count
   *packet++ = (count_bytes + 4) >> 8; // 6 MSB count
   *packet++ = 0x55;   // 7 Instruction
@@ -513,11 +534,13 @@ void LocalRegistersRead(uint16_t register_id, uint16_t count_bytes, uint8_t prot
 void LocalRegistersWrite(uint16_t register_id, uint8_t* data, uint16_t count_bytes, uint8_t protocol)
 {
   #ifdef DBGSerial
-  DBGSerial.printf("\nsLocalRegistersWrite id:%x Count: %d ", register_id, count_bytes);
-  for (uint16_t i = 0; i < count_bytes; i++) {
-    DBGSerial.printf(" %x", data[i]);
+  if (print_debug_outputs) {
+    DBGSerial.printf("\nsLocalRegistersWrite id:%x Count: %d ", register_id, count_bytes);
+    for (uint16_t i = 0; i < count_bytes; i++) {
+      DBGSerial.printf(" %x", data[i]);
+    }
+    DBGSerial.println();
   }
-  DBGSerial.println();
   #endif   
 
   if ( ! ValidateWriteData(register_id, data, count_bytes) ) {
@@ -529,7 +552,7 @@ void LocalRegistersWrite(uint16_t register_id, uint8_t* data, uint16_t count_byt
     memcpy(g_controller_registers + register_id, data, count_bytes);
 
     // If at least some of the registers set is in the EEPROM area, save updates
-    if (register_id <= CM904_EEPROM_LAST_INDEX)
+    if (register_id <= REG_MR_EEPROM_LAST_INDEX)
       SaveEEPromSectionsLocalRegisters();
     if (protocol == 1)
       sendProtocol1StatusPacket(ERR_NONE, NULL, 0);
@@ -566,91 +589,104 @@ void CheckHardwareForLocalReadRequest(uint16_t register_id, uint16_t count_bytes
 {
   while (count_bytes) {
     switch (register_id) {
-      case CM904_BUTTON_STATUS:
-        g_controller_registers[CM904_BUTTON_STATUS] = digitalRead(BOARD_BUTTON_PIN);
+      case REG_MR_BUTTON_STATUS:
+        g_controller_registers[REG_MR_BUTTON_STATUS] = digitalRead(IOPIN_PUSH_SW_1);
         break;
-      case CM485_BUTTON1:
-        g_controller_registers[CM485_BUTTON1] = digitalRead(16);
+      case REG_4R_BUTTON_M1_R2:
+        g_controller_registers[REG_4R_BUTTON_M1_R2] = digitalRead(IOPIN_PUSH_SW_2);
         break;
-      case CM485_BUTTON2:
-        g_controller_registers[CM485_BUTTON2] = digitalRead(17);
+#ifdef __OPENCM__
+      case REG_4_BUTTON_M2:
+        g_controller_registers[REG_4_BUTTON_M2] = digitalRead(IOPIN_PUSH_SW_3);
         break;
-      case CM904_RANDOM_NUMBER:
-        g_controller_registers[CM904_RANDOM_NUMBER] = random(256);
+#endif
+#ifdef __OPENCR__
+      case REG_R_DIP_SW_1:
+        g_controller_registers[REG_R_DIP_SW_1] = digitalRead(IOPIN_PUSH_SW_1);
         break;
-      case CM904_Port1_IR_Sensor:           //P2 2r
-        ReadOLLODevice(1, IR_SENSOR, CM904_Port1_IR_Sensor, 2); 
+      case REG_R_DIP_SW_2:
+        g_controller_registers[REG_R_DIP_SW_2] = digitalRead(IOPIN_PUSH_SW_2);
         break;
-      case CM904_Port4_IR_Sensor:           //P2 2r
-        ReadOLLODevice(4, IR_SENSOR, CM904_Port4_IR_Sensor, 2); 
+      case REG_R_DXL_POWER:
+        g_controller_registers[REG_R_DXL_POWER] = digitalRead(IOPIN_DXL_PWR_EN);
         break;
-      case CM904_Port1_DMS_Sensor:          //P2 2r
-        ReadOLLODevice(1, DMS_SENSOR, CM904_Port1_DMS_Sensor, 2); 
+#endif
+      case REG_MR_RANDOM_NUMBER:
+        g_controller_registers[REG_MR_RANDOM_NUMBER] = random(256);
         break;
-      case CM904_Port2_DMS_Sensor:          //P2 2r
-        ReadOLLODevice(2, DMS_SENSOR, CM904_Port2_DMS_Sensor, 2); 
+      case REG_MR_Port1_IR_Sensor:           //P2 2r
+        ReadOLLODevice(1, IR_SENSOR, REG_MR_Port1_IR_Sensor, 2); 
         break;
-      case CM904_Port3_DMS_Sensor:          //P2 2r
-        ReadOLLODevice(3, DMS_SENSOR, CM904_Port3_DMS_Sensor, 2); 
+      case REG_MR_Port4_IR_Sensor:           //P2 2r
+        ReadOLLODevice(4, IR_SENSOR, REG_MR_Port4_IR_Sensor, 2); 
         break;
-      case CM904_Port4_DMS_Sensor:          //P2 2r
-        ReadOLLODevice(4, DMS_SENSOR, CM904_Port4_DMS_Sensor, 2); 
+      case REG_MR_Port1_DMS_Sensor:          //P2 2r
+        ReadOLLODevice(1, DMS_SENSOR, REG_MR_Port1_DMS_Sensor, 2); 
         break;
-      case CM904_Port1_Touch_Sensor:        //P2 1r
-        ReadOLLODevice(1, TOUCH_SENSOR, CM904_Port1_Touch_Sensor, 1); 
+      case REG_MR_Port2_DMS_Sensor:          //P2 2r
+        ReadOLLODevice(2, DMS_SENSOR, REG_MR_Port2_DMS_Sensor, 2); 
         break;
-      case CM904_Port2_Touch_Sensor:        //P2 1r
-        ReadOLLODevice(2, TOUCH_SENSOR, CM904_Port2_Touch_Sensor, 1); 
+      case REG_MR_Port3_DMS_Sensor:          //P2 2r
+        ReadOLLODevice(3, DMS_SENSOR, REG_MR_Port3_DMS_Sensor, 2); 
         break;
-      case CM904_Port3_Touch_Sensor:        //P2 1r
-        ReadOLLODevice(3, TOUCH_SENSOR, CM904_Port3_Touch_Sensor, 1); 
+      case REG_MR_Port4_DMS_Sensor:          //P2 2r
+        ReadOLLODevice(4, DMS_SENSOR, REG_MR_Port4_DMS_Sensor, 2); 
         break;
-      case CM904_Port4_Touch_Sensor:        //P2 1r
-        ReadOLLODevice(4, TOUCH_SENSOR, CM904_Port4_Touch_Sensor, 1); 
+      case REG_MR_Port1_Touch_Sensor:        //P2 1r
+        ReadOLLODevice(1, TOUCH_SENSOR, REG_MR_Port1_Touch_Sensor, 1); 
         break;
-      case CM904_Port2_LED_Module:          //P2 1rw
+      case REG_MR_Port2_Touch_Sensor:        //P2 1r
+        ReadOLLODevice(2, TOUCH_SENSOR, REG_MR_Port2_Touch_Sensor, 1); 
         break;
-      case CM904_Port3_LED_Module:          //P2 1rw
+      case REG_MR_Port3_Touch_Sensor:        //P2 1r
+        ReadOLLODevice(3, TOUCH_SENSOR, REG_MR_Port3_Touch_Sensor, 1); 
         break;
-      case CM904_Port2_User_Device:         //P2 2rw
+      case REG_MR_Port4_Touch_Sensor:        //P2 1r
+        ReadOLLODevice(4, TOUCH_SENSOR, REG_MR_Port4_Touch_Sensor, 1); 
         break;
-      case CM904_Port3_User_Device:         //P2 2rw
+      case REG_MR_Port2_LED_Module:          //P2 1rw
         break;
-      case CM904_Port1_Temperature_Sensor:  //P2 1r
+      case REG_MR_Port3_LED_Module:          //P2 1rw
         break;
-      case CM904_Port2_Temperature_Sensor:  //P2 1r
+      case REG_MR_Port2_User_Device:         //P2 2rw
         break;
-      case CM904_Port3_Temperature_Sensor:  //P2 1r
+      case REG_MR_Port3_User_Device:         //P2 2rw
         break;
-      case CM904_Port4_Temperature_Sensor:  //P2 1r
+      case REG_MR_Port1_Temperature_Sensor:  //P2 1r
         break;
-      case CM904_Port1_Ultrasonic_Sensor:   //P2 1r
+      case REG_MR_Port2_Temperature_Sensor:  //P2 1r
         break;
-      case CM904_Port2_Ultrasonic_Sensor:   //P2 1r
+      case REG_MR_Port3_Temperature_Sensor:  //P2 1r
         break;
-      case CM904_Port3_Ultrasonic_Sensor:   //P2 1r
+      case REG_MR_Port4_Temperature_Sensor:  //P2 1r
         break;
-      case CM904_Port4_Ultrasonic_Sensor:   //P2 1r
+      case REG_MR_Port1_Ultrasonic_Sensor:   //P2 1r
         break;
-      case CM904_Port1_Magnetic_Sensor:     //P2 1r
+      case REG_MR_Port2_Ultrasonic_Sensor:   //P2 1r
         break;
-      case CM904_Port2_Magnetic_Sensor:     //P2 1r
+      case REG_MR_Port3_Ultrasonic_Sensor:   //P2 1r
         break;
-      case CM904_Port3_Magnetic_Sensor:     //P2 1r
+      case REG_MR_Port4_Ultrasonic_Sensor:   //P2 1r
         break;
-      case CM904_Port4_Magnetic_Sensor:     //P2 1r
+      case REG_MR_Port1_Magnetic_Sensor:     //P2 1r
         break;
-      case CM904_Port1_Motion_Sensor:       //P2 1r
+      case REG_MR_Port2_Magnetic_Sensor:     //P2 1r
         break;
-      case CM904_Port2_Motion_Sensor:       //P2 1r
+      case REG_MR_Port3_Magnetic_Sensor:     //P2 1r
         break;
-      case CM904_Port3_Motion_Sensor:       //P2 1r
+      case REG_MR_Port4_Magnetic_Sensor:     //P2 1r
         break;
-      case CM904_Port4_Motion_Sensor:       //P2 1r
+      case REG_MR_Port1_Motion_Sensor:       //P2 1r
         break;
-      case CM904_Port2_Color_Sensor:        //P2 1r
+      case REG_MR_Port2_Motion_Sensor:       //P2 1r
         break;
-      case CM904_Port3_Color_Sensor:        //P2 1r
+      case REG_MR_Port3_Motion_Sensor:       //P2 1r
+        break;
+      case REG_MR_Port4_Motion_Sensor:       //P2 1r
+        break;
+      case REG_MR_Port2_Color_Sensor:        //P2 1r
+        break;
+      case REG_MR_Port3_Color_Sensor:        //P2 1r
         break;
 
     }
@@ -668,6 +704,7 @@ uint8_t ValidateWriteData(uint8_t register_id, uint8_t* data, uint8_t count_byte
   if (count_bytes == 0  || ( top >= REG_TABLE_SIZE)) {
     return false;
   }
+  UNUSED(data);
 #ifdef LATER
   // Check that the value written are acceptable
   for (uint8_t i = 0 ; i < count_bytes; i++ ) {
@@ -689,26 +726,33 @@ void UpdateHardwareAfterLocalWrite(uint8_t register_id, uint8_t count_bytes)
 {
   while (count_bytes) {
     switch (register_id) {
-      case CM904_GREEN_LED:
-        digitalWriteFast(LED_BUILTIN, !g_controller_registers[CM904_GREEN_LED]);
+      case REG_M_GREEN_LED:
+        digitalWriteFast(LED_BUILTIN, !g_controller_registers[REG_M_GREEN_LED]);
         break;
-      case CM485_LED1:
-        digitalWriteFast(18, !g_controller_registers[CM485_LED1]);
-      case CM485_LED2:
-        digitalWriteFast(19, !g_controller_registers[CM485_LED2]);
-      case CM485_LED3:
-        digitalWriteFast(20, !g_controller_registers[CM485_LED3]);
+      case REG_4R_LED1:
+        digitalWrite(IOPIN_LED_USER_1, !g_controller_registers[REG_4R_LED1]); break;
+      case REG_4R_LED2:
+        digitalWrite(IOPIN_LED_USER_2, !g_controller_registers[REG_4R_LED2]); break;
+      case REG_4R_LED3:
+        digitalWrite(IOPIN_LED_USER_3, !g_controller_registers[REG_4R_LED3]); break;
+      case REG_R_LED4:
+        digitalWrite(IOPIN_LED_USER_4, !g_controller_registers[REG_4R_LED3]); break;
+#ifdef __OPENCR__
+      case REG_R_DXL_POWER:
+        digitalWrite(IOPIN_DXL_PWR_EN, g_controller_registers[REG_R_DXL_POWER]);   
+        break;
+#endif
       //case CM904_MOTION_LED:
-      case CM904_P2_BAUD_RATE_BUS:
-        if (DXL_BUSS._dxl_baud != g_controller_registers[CM904_P2_BAUD_RATE_BUS]) {
-          DXL_BUSS.setBaudRate(g_controller_registers[CM904_P2_BAUD_RATE_BUS]);
+      case REG_MR_P2_BAUD_RATE_BUS:
+        if (DXL_BUSS._dxl_baud != g_controller_registers[REG_MR_P2_BAUD_RATE_BUS]) {
+          DXL_BUSS.setBaudRate(g_controller_registers[REG_MR_P2_BAUD_RATE_BUS]);
         }
         break;
-      case CM904_DYNAMIXEL_CHANNEL:
+      case REG_M_DYNAMIXEL_CHANNEL:
         // If we change ports, Close the previous one and open the new one.
-        if (DXL_BUSS._dxl_buss != g_controller_registers[CM904_DYNAMIXEL_CHANNEL]) {
+        if (DXL_BUSS._dxl_buss != g_controller_registers[REG_M_DYNAMIXEL_CHANNEL]) {
           DXL_BUSS.closePort();
-          if (!DXL_BUSS.openPort(g_controller_registers[CM904_DYNAMIXEL_CHANNEL], g_controller_registers[CM904_P2_BAUD_RATE_BUS])) {
+          if (!DXL_BUSS.openPort(g_controller_registers[REG_M_DYNAMIXEL_CHANNEL], g_controller_registers[REG_MR_P2_BAUD_RATE_BUS])) {
             signal_abort(3);
           }
         }
@@ -773,7 +817,7 @@ uint16_t update_crc(uint16_t crc_accum, uint8_t *data_blk_ptr, uint16_t data_blk
 //-----------------------------------------------------------------------------
 void InitalizeRegisterTable(void)
 {
-  uint8_t saved_reg_values[CM904_EEPROM_LAST_INDEX + 1];
+  uint8_t saved_reg_values[REG_MR_EEPROM_LAST_INDEX + 1];
   uint8_t checksum = 0;
   DBGPrintln("InitializeRegisterTable"); DBGFlush();
   // First check to see if valid version is stored in EEPROM...
@@ -781,9 +825,9 @@ void InitalizeRegisterTable(void)
     return;
 
   // Now read in the bytes from the EEPROM
-  for (int i = CM904_FIRMWARE_VERSION; i <= CM904_EEPROM_LAST_INDEX; i++)
+  for (int i = REG_MR_FIRMWARE_VERSION; i <= REG_MR_EEPROM_LAST_INDEX; i++)
   {
-    uint8_t ch = EEPROM.read(1 + i - CM904_FIRMWARE_VERSION);
+    uint8_t ch = EEPROM.read(1 + i - REG_MR_FIRMWARE_VERSION);
     checksum += ch;
     saved_reg_values[i] = ch;
   }
@@ -793,7 +837,7 @@ void InitalizeRegisterTable(void)
   {
     DBGPrintln("  Restored registers from EEPROM");
     // Valid, so copy values into the working table
-    for (int i = CM904_FIRMWARE_VERSION; i <= CM904_EEPROM_LAST_INDEX; i++)
+    for (int i = REG_MR_FIRMWARE_VERSION; i <= REG_MR_EEPROM_LAST_INDEX; i++)
       g_controller_registers[i] = saved_reg_values[i];
   }
 }
@@ -806,9 +850,9 @@ void SaveEEPromSectionsLocalRegisters(void)
   // Prety stupid here. simply loop and write out data.  Will also keep a checksum...
   uint8_t checksum = 0;
 
-  for (int i = CM904_FIRMWARE_VERSION; i <= CM904_EEPROM_LAST_INDEX; i++)
+  for (int i = REG_MR_FIRMWARE_VERSION; i <= REG_MR_EEPROM_LAST_INDEX; i++)
   {
-    EEPROM.write(1 + i - CM904_FIRMWARE_VERSION, g_controller_registers[i]);
+    EEPROM.write(1 + i - REG_MR_FIRMWARE_VERSION, g_controller_registers[i]);
     checksum += g_controller_registers[i];
   }
   // Lets write the Checksum
