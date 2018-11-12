@@ -735,9 +735,9 @@ void UpdateHardwareAfterLocalWrite(uint8_t register_id, uint8_t count_bytes)
         digitalWrite(IOPIN_LED_USER_2, !g_controller_registers[REG_4R_LED2]); break;
       case REG_4R_LED3:
         digitalWrite(IOPIN_LED_USER_3, !g_controller_registers[REG_4R_LED3]); break;
+#ifdef __OPENCR__
       case REG_R_LED4:
         digitalWrite(IOPIN_LED_USER_4, !g_controller_registers[REG_4R_LED3]); break;
-#ifdef __OPENCR__
       case REG_R_DXL_POWER:
         digitalWrite(IOPIN_DXL_PWR_EN, g_controller_registers[REG_R_DXL_POWER]);   
         break;
