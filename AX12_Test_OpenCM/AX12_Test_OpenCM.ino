@@ -8,7 +8,7 @@
 // Global Include files
 //=============================================================================
 #include <DynamixelSDK.h>
-
+#include <syscalls.h>
 //=============================================================================
 // Options...
 //=============================================================================
@@ -283,15 +283,15 @@ word          g_wServoGoalSpeed;
 // forward reference
 //====================================================================================================
 extern bool IsValidServo(uint8_t servo_id);
-
 //====================================================================================================
 // Setup
 //====================================================================================================
 void setup() {
-
   while (!Serial && (millis() < 3000)) ;  // Give time for Teensy and other USB arduinos to create serial port
   Serial.begin(38400);  // start off the serial port.
   Serial.println("\nCM9.04 Servo Test program");
+  initMemoryUsageTest();
+
   pinMode(0, OUTPUT);
 #if defined(SERVO_RX_PIN)
   SERVOBUS.setRX(SERVO_RX_PIN);
@@ -353,6 +353,7 @@ void setup() {
 void loop() {
   // Output a prompt
   PrintServoVoltage();
+  printMemoryUsage();
 
   // lets toss any charcters that are in the input queue
   while (Serial.read() != -1)
@@ -547,6 +548,15 @@ bool ReportAnyErrors(const char *psz, uint8_t servo_id, int retval, uint8_t erro
   }
   Serial.print(",");
   Serial.print(error, HEX);
+  switch (error) {
+    case 1: Serial.print(" Result"); break;
+    case 2: Serial.print(" Instruction"); break;
+    case 3: Serial.print(" CRC"); break;
+    case 4: Serial.print(" Range"); break;
+    case 5: Serial.print(" Length"); break;
+    case 6: Serial.print(" Limit"); break;
+    case 7:  Serial.print(" Access"); break;
+  }
   Serial.print(") ");
   return true;
 }
@@ -1019,7 +1029,7 @@ void WriteServoValues() {
     } else {
       retval = packetHandler2->write1ByteTxRx(portHandler, wID, wReg, wVal, &error);
     }
-    if (!ReportAnyErrors("Write Reg", wID, retval, error)) {
+    if (!ReportAnyErrors(" Write Reg", wID, retval, error)) {
       Serial.println(" Success");
     } else {
       Serial.println();
@@ -1075,4 +1085,48 @@ void SetBaudRate()
 
   Serial.println("Doing new Servo Scan");
   FindServos();
+}
+
+//=================================================================================
+// Lets initialize our memory usage code, to get an idea of how much has been
+// used
+register uint8_t * stack_ptr asm("sp");
+extern char end asm("end");
+
+uint32_t g_end_stack_pointer;
+uint32_t g_start_heap_pointer;
+
+void initMemoryUsageTest()
+{
+  // Guess on start of stack. // probably using less than 100 bytes of stack space...
+  g_end_stack_pointer = ((uint32_t)stack_ptr + 100) & 0xfffff000;
+
+  // get the start of the heap ponter
+  g_start_heap_pointer = (uint32_t)&end;
+
+  // Print out some memory information
+  Serial.printf("starting Heap info: start: %x current: %x\n", g_start_heap_pointer, (uint32_t)_sbrk(0));
+  Serial.printf("Start Stack info: end: %x current: %x\n", g_end_stack_pointer, (uint32_t)stack_ptr);
+  Serial.println("Try to init memory");
+  Serial.flush(); // make sure it has chance to write out.
+  uint8_t *sp_minus = stack_ptr - 10;  // leave a little slop
+  for (uint8_t *p = (uint8_t*)_sbrk(0); p < sp_minus; p++) *p = 0xff; // init to ff
+  Serial.println("After init memory");
+}
+
+//=================================================================================
+void printMemoryUsage()
+{
+  uint8_t *current_heap_ptr = (uint8_t*)_sbrk(0);
+  Serial.printf("Heap ptr: %x  Usage: %d\n", (uint32_t)current_heap_ptr,
+                 (uint32_t)current_heap_ptr - g_start_heap_pointer);
+
+  // stack info
+  uint8_t *sp_minus = stack_ptr - 10;  // leave a little slop
+  uint8_t *p = current_heap_ptr;
+
+  // try to find out how far the stack has been used
+  while ((p < sp_minus) && (*p == 0xff)) p++;
+  Serial.printf("Stack Max: %x, usage: %d\n", p, g_end_stack_pointer - (uint32_t)p);
+  Serial.printf("Estimated unused memory: %d\n", (uint32_t)(p - current_heap_ptr));
 }
