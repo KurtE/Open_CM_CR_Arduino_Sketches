@@ -548,6 +548,7 @@ bool ReportAnyErrors(const char *psz, uint8_t servo_id, int retval, uint8_t erro
   }
   Serial.print(",");
   Serial.print(error, HEX);
+  if (error & 0x80) Serial.print(" Hardware Alert");
   switch (error) {
     case 1: Serial.print(" Result"); break;
     case 2: Serial.print(" Instruction"); break;
@@ -1105,6 +1106,7 @@ void initMemoryUsageTest()
   g_start_heap_pointer = (uint32_t)&end;
 
   // Print out some memory information
+  Serial.printf("Estimated global data size: %d\n", g_start_heap_pointer & 0xffff);
   Serial.printf("starting Heap info: start: %x current: %x\n", g_start_heap_pointer, (uint32_t)_sbrk(0));
   Serial.printf("Start Stack info: end: %x current: %x\n", g_end_stack_pointer, (uint32_t)stack_ptr);
   Serial.println("Try to init memory");
