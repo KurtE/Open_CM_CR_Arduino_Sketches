@@ -283,7 +283,10 @@ extern INCONTROLSTATE   g_InControlState;        // State information that contr
 #define max(a, b) (((a)>=(b))? (a):(b))
 #endif
 
+#ifdef OPT_MEMORY_USAGE
+extern void initMemoryUsageTest();
+extern void printMemoryUsage();
+
+#endif //OPT_MEMORY_USAGE
+
 #endif
-
-
-

@@ -48,6 +48,7 @@
 #endif
 
 #define DEBUG_IOPINS
+#define OPT_MEMORY_USAGE
 
 #ifdef DEBUG_IOPINS
 #if defined(__OPENCM904__)

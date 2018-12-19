@@ -42,6 +42,7 @@
 #define DEBUG
 //#define DEBUG_X
 #endif
+#include <syscalls.h>
 
 
 //--------------------------------------------------------------------
@@ -732,6 +733,7 @@ extern boolean TerminalMonitor(void);
 // SETUP: the main arduino setup function.
 //--------------------------------------------------------------------------
 void setup(){
+
 #ifdef OPT_SKETCHSETUP
   SketchSetup();
 #endif  
@@ -741,6 +743,9 @@ void setup(){
   while (!Serial && (millis() < 3000)) ;
   DBGSerial.begin(38400);
   DBGSerial.write("Program Start\n\r");
+#ifdef OPT_MEMORY_USAGE
+  initMemoryUsageTest();
+#endif  
 #endif
   // Init our ServoDriver
   DBGSerial.println("Before Servo Driver Start");
@@ -807,6 +812,11 @@ void setup(){
   pinMode(DEBUG_PIN_BACKGROUND, OUTPUT);
   pinMode(DEBUG_PIN_BEGIN_UPDATE, OUTPUT);
 #endif    
+
+#ifdef OPT_MEMORY_USAGE
+  printMemoryUsage();
+#endif  
+
 }
 
 
@@ -2260,6 +2270,10 @@ boolean TerminalMonitor(void)
 #ifdef OPT_DUMP_EEPROM
     DBGSerial.println("E - Dump EEPROM");
 #endif
+#ifdef OPT_MEMORY_USAGE
+    DBGSerial.println("P - Print Memory Usage");
+#endif  
+
 #ifdef QUADMODE
 //	DBGSerial.println("B <percent>");
     DBGSerial.println("G ST NL RR RF LR LF");
@@ -2313,6 +2327,11 @@ boolean TerminalMonitor(void)
       else
         DBGSerial.println("Debug is off");
     } 
+#ifdef OPT_MEMORY_USAGE
+    else if ((ich == 1) && ((szCmdLine[0] == 'p') || (szCmdLine[0] == 'P'))) {
+      printMemoryUsage();
+    } 
+#endif
 #ifdef OPT_DUMP_EEPROM
     else if (((szCmdLine[0] == 'e') || (szCmdLine[0] == 'E'))) {
       DumpEEPROMCmd(szCmdLine);
@@ -2559,3 +2578,50 @@ void UpdateInitialPosAndAngCmd(byte *pszCmdLine) {
 #endif
 
 #endif
+
+//=================================================================================
+// Lets initialize our memory usage code, to get an idea of how much has been
+// used
+#ifdef OPT_MEMORY_USAGE
+register uint8_t * stack_ptr asm("sp");
+extern char end asm("end");
+
+uint32_t g_end_stack_pointer;
+uint32_t g_start_heap_pointer;
+
+void initMemoryUsageTest()
+{
+  // Guess on start of stack. // probably using less than 100 bytes of stack space...
+  g_end_stack_pointer = ((uint32_t)stack_ptr + 100) & 0xfffff000;
+
+  // get the start of the heap ponter
+  g_start_heap_pointer = (uint32_t)&end;
+
+  // Print out some memory information
+  DBGSerial.printf("Estimated global data size: %d\n", g_start_heap_pointer & 0xffff);
+  DBGSerial.printf("starting Heap info: start: %x current: %x\n", g_start_heap_pointer, (uint32_t)_sbrk(0));
+  DBGSerial.printf("Start Stack info: end: %x current: %x\n", g_end_stack_pointer, (uint32_t)stack_ptr);
+  DBGSerial.println("Try to init memory");
+  DBGSerial.flush(); // make sure it has chance to write out.
+  uint8_t *sp_minus = stack_ptr - 10;  // leave a little slop
+  for (uint8_t *p = (uint8_t*)_sbrk(0); p < sp_minus; p++) *p = 0xff; // init to ff
+  DBGSerial.println("After init memory");
+}
+
+//=================================================================================
+void printMemoryUsage()
+{
+  uint8_t *current_heap_ptr = (uint8_t*)_sbrk(0);
+  DBGSerial.printf("Heap ptr: %x  Usage: %d\n", (uint32_t)current_heap_ptr,
+                 (uint32_t)current_heap_ptr - g_start_heap_pointer);
+
+  // stack info
+  uint8_t *sp_minus = stack_ptr - 10;  // leave a little slop
+  uint8_t *p = current_heap_ptr;
+
+  // try to find out how far the stack has been used
+  while ((p < sp_minus) && (*p == 0xff)) p++;
+  DBGSerial.printf("Stack Max: %x, usage: %d\n", p, g_end_stack_pointer - (uint32_t)p);
+  DBGSerial.printf("Estimated unused memory: %d\n", (uint32_t)(p - current_heap_ptr));
+}
+#endif // OPT_MEMORY_USAGE
