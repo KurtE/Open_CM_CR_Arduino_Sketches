@@ -1,4 +1,4 @@
-#include <DynamixelSDK.h>
+#include <Dynamixel2Arduino.h>
 //====================================================================================================
 // Kurts Quick and dirty test program to find servos on either Open CM or Open CR boards
 // This is a test, only a test...
@@ -11,26 +11,47 @@
 //=============================================================================
 // Options...
 //=============================================================================
-#if defined(__OPENCR__) || defined(__OPENCM904__)
-uint8_t port_handler_numbers[] = {1, 3};    // Setup to handle both ports of openCR
+typedef struct {
+  DYNAMIXEL::SerialPortHandler *port;
+  uint8_t port_number;
+  uint8_t protocol_index;
+} PortList;
+
+#if defined(__OPENCM904__)
+#define DXL_SERIAL0 Serial1
+#define DXL_DIR_PIN0 28
+DYNAMIXEL::SerialPortHandler ph1(Serial1, 28);
+DYNAMIXEL::SerialPortHandler ph3(Serial3, 22);
+PortList portlist[] = {
+  {&ph1, 1, 1},
+  {&ph1, 1, 2},
+  {&ph3, 3, 1},
+  {&ph3, 3, 2},
+};   // Setup to handle both ports of openCR
+#elif defined(__OPENCR__)
+#define DXL_SERIAL0 Serial1
+#define DXL_DIR_PIN0 -1
+DYNAMIXEL::SerialPortHandler dxlSerialPortHandlers[] =
+{DYNAMIXEL::SerialPortHandler(DXL_SERIAL0, DXL_DIR_PIN0)};
 #endif
 #if defined(TEENSYDUINO)
-uint8_t port_handler_numbers[] = {1};     // Default to Serial1
-#if defined(__MK66FX1M0__)
-// Try with the T3.6 board
-#define SERVOBUS Serial1
-#define SERVO_RX_PIN           27
-#define SERVO_TX_PIN           26
+#define DXL_SERIAL0 Serial1
+#define DXL_DIR_PIN0 28
+PortList portlist[] = {
+  {DYNAMIXEL::SerialPortHandler(DXL_SERIAL0, DXL_DIR_PIN0), 1, 1},
+  {DYNAMIXEL::SerialPortHandler(DXL_SERIAL0, DXL_DIR_PIN0), 1, 2}
+};
 #define SERVO_DIRECTION_PIN 28
 #define SERVO_POWER_ENABLE_PIN  29
 #else
 #define SERVO_POWER_ENABLE_PIN 2
 #endif
-#endif
-#define COUNT_PORTHANDLERS  sizeof(port_handler_numbers)
+
+#define COUNT_PORT_LIST  (sizeof(portlist)/sizeof(portlist[0]))
+Dynamixel2Arduino dxl;
 
 //=============================================================================
-// Define differnt robots..
+// Define different robots..
 //=============================================================================
 
 // Protocol version
@@ -54,12 +75,14 @@ uint8_t port_handler_numbers[] = {1};     // Default to Serial1
 //=============================================================================
 // Global objects
 // Handle to port handler and packet handler;
-dynamixel::PortHandler *portHandlers[COUNT_PORTHANDLERS];
-
-dynamixel::PacketHandler *packetHandler1;
-dynamixel::PacketHandler *packetHandler2;
 uint8_t g_servo_protocol[254];
 uint32_t g_baud_rate = DXL_BAUDRATE;
+
+void wait_keyboard() {
+  Serial.println("Hit any key to continue"); Serial.flush();
+  while (!Serial.available()) ;
+  while (Serial.read() != -1) ;
+}
 //====================================================================================================
 // Setup
 //====================================================================================================
@@ -68,50 +91,22 @@ void setup() {
   while (!Serial && (millis() < 3000)) ;  // Give time for Teensy and other USB arduinos to create serial port
   Serial.begin(38400);  // start off the serial port.
   Serial.println("\nCM9.04 Find Servos program");
-#if defined(SERVO_RX_PIN)
-  SERVOBUS.setRX(SERVO_RX_PIN);
-#endif
-#if defined(SERVO_TX_PIN)
-  SERVOBUS.setTX(SERVO_TX_PIN);
-#endif
-
+//  wait_keyboard();
 #ifdef SERVO_POWER_ENABLE_PIN
   pinMode(SERVO_POWER_ENABLE_PIN, OUTPUT);
   digitalWrite(SERVO_POWER_ENABLE_PIN, HIGH);
 #endif
-  pinMode(4, OUTPUT);
-
-  // Initialize PacketHandler instance
-  packetHandler1 = dynamixel::PacketHandler::getPacketHandler(PROTOCOL_VERSION);
-  packetHandler2 = dynamixel::PacketHandler::getPacketHandler(PROTOCOL_VERSION2);
-  // Open port
+#if defined(BOARD_OpenCM904) && (DXL_SERIAL == Serial1)
+  Serial.println("*** OpenCM9.04 setDxlMode ***");
+  Serial1.setDxlMode(true);
+#endif
 
   // Set the protocol version
   // Get methods and members of Protocol1PacketHandler or Protocol2PacketHandler
   // Initialize PortHandler instances
 
-  char port_string[5];
-  for (uint8_t i = 0; i < COUNT_PORTHANDLERS; i++) {
-    itoa(port_handler_numbers[i], port_string, sizeof(port_string));
-    portHandlers[i] = dynamixel::PortHandler::getPortHandler(port_string);
-    Serial.printf("Get Port Handler %s %x\n", port_string, (uint32_t)portHandlers[i]);
-    // Lets init the two different port handlers.
-#if defined(SERVO_DIRECTION_PIN)
-    portHandlers[i]->setTXEnablePin(SERVO_DIRECTION_PIN);
-#endif
-    Serial.println("    Call Open Port");
-    if (!portHandlers[i]->openPort()) {
-      Serial.print("Failed to open port 1 the Dynamixel port: ");
-      Serial.println(port_string);
-    }
-    Serial.println("    Set Baud Rate");
-    if (!portHandlers[i]->setBaudRate(g_baud_rate)) {
-      Serial.print("Failed to change the Port 1 Dynamixel baudrate: ");
-      Serial.println(port_string);
-    }
-  }
-  delay(1000);
   // Lets start of trying to locate all servos.
+  SetBaudRate(DXL_BAUDRATE);
   FindServos();
 
 
@@ -137,10 +132,9 @@ void loop() {
 }
 
 //=======================================================================================
-
+XelInfoFromPing_t ping_info[32];
 void FindServos(void) {
 
-  uint16_t w;
   Serial.print("\nSearch for all servos at baud rate: ");
   Serial.println(g_baud_rate, DEC);
 
@@ -148,69 +142,75 @@ void FindServos(void) {
   for (int i = 0; i < 254; i++) {
     g_servo_protocol[i] = 0; // not found
   }
-  for (uint8_t port_index = 0; port_index < COUNT_PORTHANDLERS; port_index++) {
-
-    dynamixel::PortHandler *portHandler = portHandlers[port_index];
+  for (uint8_t port_index = 0; port_index < COUNT_PORT_LIST; port_index++) {
+    dxl.setPort(portlist[port_index].port);
     Serial.print("Begin Searching on Port: ");
-    Serial.println(port_handler_numbers[port_index], DEC);
+    Serial.println(portlist[port_index].port_number, DEC);
 
-    Serial.println("  Begin Protocol 1: ");
-    digitalWrite(4, !digitalRead(4));
-    for (int i = 0; i < 254; i++) {
-      if (packetHandler1->read2ByteTxRx(portHandler, i, AX_PRESENT_POSITION_L, &w) == COMM_SUCCESS) {
-        if (g_servo_protocol[i]) {
-          Serial.println("Multiple servos found with same ID");
+    dxl.setPortProtocolVersionUsingIndex(portlist[port_index].protocol_index);
+    Serial.println(dxl.getPortProtocolVersion(), 2);
+    //  wait_keyboard();
+    if (portlist[port_index].protocol_index == 1) {
+      Serial.println("  Begin Protocol 1: ");
+      for (int i = 0; i < 254; i++) {
+        //Serial.print(".");
+        if (dxl.ping(i)) {
+          if (g_servo_protocol[i]) {
+            Serial.println("Multiple servos found with same ID");
+          }
+          g_servo_protocol[i] = 1;
+          Serial.printf("  %d Type:%d Position:%d\n", i,
+                        dxl.getModelNumber(i), static_cast<int>(dxl.getPresentPosition(i))) ;
         }
-        g_servo_protocol[i] = 1;
-        Serial.print("    ");
-        Serial.print(i, DEC);
-        Serial.print(" - ");
-        Serial.println(w, DEC);
       }
-    }
 
-    Serial.println("  Done");
-    Serial.println("  Begin Protocol 2: ");
-    digitalWrite(4, !digitalRead(4));
-    for (int i = 0; i < 254; i++) {
-      uint16_t model_number;
-      uint32_t position;
-      if (packetHandler2->ping(portHandler, i, &model_number) == COMM_SUCCESS) {
-        if (g_servo_protocol[i]) {
-          Serial.println("Multiple servos found with same ID");
+      Serial.println("  Done");
+    } else {
+      Serial.println("  Begin Protocol 2 Simple Ping: ");
+      for (uint8_t i = 0; i < 254; i++) {
+        //Serial.print("-");
+        if (dxl.ping(i)) {
+          if (g_servo_protocol[i] == 1) {
+            Serial.println("Multiple servos found with same ID");
+          }
+          g_servo_protocol[i] = 2;
+          Serial.printf("  %d Type:%d Position:%d\n", i,
+                        dxl.getModelNumber(i), static_cast<int>(dxl.getPresentPosition(i))) ;
         }
-        g_servo_protocol[i] = 2;
-        Serial.print("    ");
-        Serial.print(i, DEC);
-        Serial.print(", Model:");
-        Serial.print((int)model_number, HEX);
-        packetHandler2->read4ByteTxRx(portHandler, i, DXL_X_PRESENT_POSITION, &position);
-        Serial.print(" - ");
-        Serial.println(position, DEC);
       }
+      Serial.println("  Begin Protocol 2 ping data: ");
+      for (uint8_t i = 0; i < 254; i++) {
+        if (dxl.ping(i, ping_info, 1)) {
+          //        if (((DYNAMIXEL::Master)dxl).ping(i, ping_info, 1)) {
+          if (g_servo_protocol[i] == 1) {
+            Serial.println("Multiple servos found with same ID");
+          }
+          g_servo_protocol[i] = 2;
+          Serial.printf("  %d Type:%x Ver:%x Position:%d \n", i,
+                        ping_info[0].model_number, ping_info[0].firmware_version, 
+                        static_cast<int>(dxl.getPresentPosition(i))) ;
+        }
+      }
+      Serial.println("  Try Protocol 2 - broadcast ping: ");
+      Serial.flush(); // flush it as ping may take awhile... 
+      
+      if (uint8_t count_pinged = dxl.ping(DXL_BROADCAST_ID, ping_info, 
+            sizeof(ping_info)/sizeof(ping_info[0]))) {
+        Serial.print("Detected Dynamixel : \n");
+        for (int i = 0; i < count_pinged; i++)
+        {
+          Serial.print("    ");
+          Serial.print(ping_info[i].id, DEC);
+          Serial.print(", Model:");
+          Serial.print(ping_info[i].model_number, HEX);
+          Serial.print(", Ver:");
+          Serial.println(ping_info[i].firmware_version, HEX);
+          g_servo_protocol[i] = 2;
+        }
+      } else Serial.printf("Broadcast returned no items(%x)\n", dxl.getLastLibErrCode());
+
+      Serial.println("  Done");
     }
-    Serial.println("  Try Protocol 2 - broadcast ping: ");
-    digitalWrite(4, !digitalRead(4));
-    
-    std::vector<uint8_t> vec;                       // Dynamixel data storages
-    if (packetHandler2->broadcastPing(portHandler, vec) == COMM_SUCCESS) {
-      Serial.print("Detected Dynamixel : \n");
-      for (int i = 0; i < (int)vec.size(); i++)
-      {
-        int id = vec.at(i);
-        Serial.print("    ");
-        Serial.print(id, DEC);
-        uint16_t model_number = 0;
-        packetHandler2->read2ByteTxRx(portHandler, id, DXL_X_MODEL_NUMBER, &model_number);
-        Serial.print(", Model:");
-        Serial.println((int)model_number, HEX);
-        
-        
-        g_servo_protocol[i] = 2;
-      }
-    } else Serial.println("Broadcast ping failed");
-    
-    Serial.println("  Done");
   }
 }
 
@@ -242,13 +242,9 @@ void SetBaudRate(uint32_t new_baud)
   Serial.print("Setting Baud to: ");
   Serial.println(new_baud);
 
-  for (uint8_t i = 0; i < COUNT_PORTHANDLERS; i++) {
-    if (!portHandlers[i]->setBaudRate(new_baud)) {
-      Serial.print("Failed to change the Port ");
-      Serial.print(port_handler_numbers[i], DEC);
-      Serial.print("Baud to: ");
-      Serial.println(new_baud, DEC);
-    }
+  for (uint8_t i = 0; i < COUNT_PORT_LIST; i++) {
+    dxl.setPort(portlist[i].port);
+    dxl.begin(new_baud);
   }
   g_baud_rate = new_baud;
 }
