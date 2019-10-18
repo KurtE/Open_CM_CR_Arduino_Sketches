@@ -223,14 +223,14 @@ bool  SyncRead::doRead(Dynamixel2Arduino &dxl,  uint32_t timeout) {
   SyncReadReturnItem_t *psrri = (SyncReadReturnItem_t *)(&_buffer[4 + _max_servos]);
   // We need to fill in the header information for ths sync write.
   if (!_buffer || !_cnt_servos ) {
-    dxl.setLastLibErrCode(DYNAMIXEL::DXL_LIB_ERROR_NULLPTR);
+    dxl.setLastLibErrCode((DYNAMIXEL::lib_err_code_t)DYNAMIXEL::DXL_LIB_ERROR_NULLPTR);
     return false;
   }
 
   if (dxl.getPortProtocolVersion() == 1.0) {
     // Protocol 1 does not support this.
     Serial.println("Error protocol 1...");
-    dxl.setLastLibErrCode(DYNAMIXEL::DXL_LIB_ERROR_NOT_SUPPORTED);
+    dxl.setLastLibErrCode((DYNAMIXEL::lib_err_code_t)DYNAMIXEL::DXL_LIB_ERROR_NOT_SUPPORTED);
     return false;
   }
 
@@ -262,7 +262,7 @@ bool  SyncRead::doRead(Dynamixel2Arduino &dxl,  uint32_t timeout) {
     }
 
     if (millis() - time_last_packet >= timeout) {
-      dxl.setLastLibErrCode(DYNAMIXEL::DXL_LIB_ERROR_TIMEOUT);
+      dxl.setLastLibErrCode((DYNAMIXEL::lib_err_code_t)DYNAMIXEL::DXL_LIB_ERROR_TIMEOUT);
       return false;
     }
   }
