@@ -60,6 +60,7 @@ extern int DXLSyncReadAddID(DXLSyncReadDataHeader_t *SRData, uint8_t id);
 extern int DXLSyncReadSendReceive(DXLSyncReadDataHeader_t *SRData, uint32_t timeout);
 
 extern DXLSyncReadReturnItem_t *DXLSyncReadRetrieveItem(DXLSyncReadDataHeader_t *SRData, uint8_t id);
+extern DXLSyncReadReturnItem_t *DXLSyncReadretrieveItemByIndex(DXLSyncReadDataHeader_t *SRData, uint8_t index);
 extern uint8_t DXLSyncReadreceiveCount(DXLSyncReadDataHeader_t *SRData);
 extern uint8_t DXLSyncReadRetrieveIDByIndex(DXLSyncReadDataHeader_t *SRData, uint8_t index);
 extern uint8_t DXLSyncReadRetrieveErrorByIndex(DXLSyncReadDataHeader_t *SRData, uint8_t index);

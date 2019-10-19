@@ -99,11 +99,25 @@ void loop() {
 
   for (uint8_t index = 0; index < syncread.receiveCount(); index++) {
     DEBUG_SERIAL.print(F("Index: ")); DEBUG_SERIAL.print(index); DEBUG_SERIAL.print(" ");
-    DEBUG_SERIAL.print(F("ID: ")); DEBUG_SERIAL.print(syncread.retrieveIDByIndex(index)); DEBUG_SERIAL.print(" ");
+    uint8_t id = syncread.retrieveIDByIndex(index);
+    DEBUG_SERIAL.print(F("ID: ")); DEBUG_SERIAL.print(id); DEBUG_SERIAL.print(" ");
     syncread.retrieveValueByIndex(index, &recv_position);
     DEBUG_SERIAL.print(F(", Present Velocity: ")); DEBUG_SERIAL.print(recv_position); DEBUG_SERIAL.print(" ");
-    DEBUG_SERIAL.print(F(", Packet Error: ")); DEBUG_SERIAL.print(syncread.retrieveErrorByIndex(index)); DEBUG_SERIAL.print(" ");
+    uint8_t error = syncread.retrieveErrorByIndex(index);
+    DEBUG_SERIAL.print(F(", Packet Error: ")); DEBUG_SERIAL.print(error); DEBUG_SERIAL.print(" ");
     DEBUG_SERIAL.print(F(", Param Length: ")); DEBUG_SERIAL.print(syncread.retrieveLengthByIndex(index)); DEBUG_SERIAL.print(" ");
+    if (error & 0x80) {
+      // Hardware error, try to reset the servo...
+      uint8_t hw_error;
+      dxl.read(id, 70, 1, &hw_error, 1, 100); 
+      DEBUG_SERIAL.print(F(", HW error:"));  DEBUG_SERIAL.print(hw_error); DEBUG_SERIAL.print(" ");
+      DEBUG_SERIAL.print(F(" *** reboot Servo ***"));
+      dxl.torqueOff(id);
+      dxl.reboot(id, 25);
+      dxl.torqueOn(id);
+      
+    }
+    
     DEBUG_SERIAL.println();
     
   }

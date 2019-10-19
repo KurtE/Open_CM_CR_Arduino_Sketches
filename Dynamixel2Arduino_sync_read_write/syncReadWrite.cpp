@@ -1,6 +1,7 @@
 
 #include "syncReadWrite.h"
 
+extern "C" {
 void dumpBuffer(const char *title, const uint8_t *pb, uint16_t count) {
   if (title) Serial.println(title);
   for (uint16_t i = 0; i < count; i++) {
@@ -8,6 +9,19 @@ void dumpBuffer(const char *title, const uint8_t *pb, uint16_t count) {
     if ((i & 0xf) == 0xf) Serial.println();
     }
   Serial.println();
+}
+
+void printForC(const char *title, int value, int eol) {
+  if (title) Serial.print(title);
+  Serial.print(value, DEC);
+  if (eol) Serial.println();
+}
+void printHexForC(const char *title, int value, int eol) {
+  if (title) Serial.print(title);
+  Serial.print(value, HEX);
+  if (eol) Serial.println();
+}
+
 }
 
 //=============================================================================
@@ -70,8 +84,8 @@ int SyncWrite::setItem(uint8_t id, void *val,  uint16_t val_offset, uint16_t val
 }
 int SyncWrite::setItemByIndex(int index, void *val,  uint16_t val_offset, uint16_t val_length) {
   if (val_length == 0xffff) val_length = _node_size;
-  Serial.printf("SyncWrite::setItemByIndex %d %d %d: ", index, val_offset, val_length);
-  dumpBuffer(NULL, (uint8_t*)val, val_length);
+  //Serial.printf("SyncWrite::setItemByIndex %d %d %d: ", index, val_offset, val_length);
+  //dumpBuffer(NULL, (uint8_t*)val, val_length);
   if (!_buffer || (index < 0) || (index >= _cnt_servos) || ((val_offset + val_length) > _node_size)) return -1; // fail
 
   uint16_t buffer_index = 5 + (_node_size + 1) * index + val_offset;
@@ -100,7 +114,7 @@ bool  SyncWrite::send(Dynamixel2Arduino &dxl) {
   _buffer[1] = _starting_addr >> 8;
   _buffer[2] = _node_size & 0xff;
   _buffer[3] = _node_size >> 8;
-  dumpBuffer("TX SYNC_WRITE", _buffer, _cnt_servos * (_node_size + 1) + 4);
+  //dumpBuffer("TX SYNC_WRITE", _buffer, _cnt_servos * (_node_size + 1) + 4);
   return dxl.txPacketInst(DXL_BROADCAST_ID, DYNAMIXEL::INST_SYNC_WRITE, _buffer,  _cnt_servos * (_node_size + 1) + 4);
 }
 
@@ -153,7 +167,7 @@ int SyncRead::idToIndex(uint8_t id) { // converts an id to index does not add if
 
 
 int SyncRead::addID(uint8_t id) {
-  Serial.printf("SyncRead::addID %d\n", id);
+  //Serial.printf("SyncRead::addID %d\n", id);
   int index = idToIndex(id);
   if (index >= 0) return index;
 
@@ -218,7 +232,7 @@ bool SyncRead::retrieveValueByIndex(uint8_t index, void *val, uint16_t val_offse
 }
 
 bool  SyncRead::doRead(Dynamixel2Arduino &dxl,  uint32_t timeout) {
-  Serial.printf("SyncRead::doRead buf:%x cnt:%d\n", _buffer, _cnt_servos);
+  //Serial.printf("SyncRead::doRead buf:%x cnt:%d\n", _buffer, _cnt_servos);
   _cnt_received = 0;  // assume we have not received anything
   SyncReadReturnItem_t *psrri = (SyncReadReturnItem_t *)(&_buffer[4 + _max_servos]);
   // We need to fill in the header information for ths sync write.
@@ -239,7 +253,7 @@ bool  SyncRead::doRead(Dynamixel2Arduino &dxl,  uint32_t timeout) {
   _buffer[1] = _starting_addr >> 8;
   _buffer[2] = _node_size & 0xff;
   _buffer[3] = _node_size >> 8;
-  dumpBuffer("TX SYNC_READ", _buffer, _cnt_servos + 4);
+  //dumpBuffer("TX SYNC_READ", _buffer, _cnt_servos + 4);
   if (!dxl.txPacketInst(DXL_BROADCAST_ID, DYNAMIXEL::INST_SYNC_READ, _buffer,  _cnt_servos + 4)) return false; // failed on tx
 
   uint32_t time_last_packet = millis();
@@ -250,8 +264,8 @@ bool  SyncRead::doRead(Dynamixel2Arduino &dxl,  uint32_t timeout) {
       psrri->id     = prx->id;
       psrri->error  = prx->error;
       psrri->length = prx->param_length;
-      Serial.printf("%x %x %d: ", prx->id, prx->error, prx->param_length);
-      dumpBuffer("RX SYNC_READ", prx->p_param, prx->param_length);
+      //Serial.printf("%x %x %d: ", prx->id, prx->error, prx->param_length);
+      //dumpBuffer("RX SYNC_READ", prx->p_param, prx->param_length);
       memcpy(psrri->data, prx->p_param, (psrri->length < _node_size) ? psrri->length : _node_size);
 
       _cnt_received++;

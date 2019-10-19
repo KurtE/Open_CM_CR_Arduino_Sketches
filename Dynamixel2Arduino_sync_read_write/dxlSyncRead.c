@@ -6,6 +6,9 @@
 // BUGBUG: these need real C version, will hack up for now...
 extern const dxl_packet_t *DXLRxPacket();
 extern boolean DXLTxPacketInst(uint8_t id, uint8_t instruction, void* buffer, uint16_t length);
+extern void dumpBuffer(const char *title, const uint8_t *pb, uint16_t count);
+extern void printForC(const char *title, int value, int eol);
+extern void printHexForC(const char *title, int value, int eol);
 
 #define DXL_BROADCAST_ID        0xFE
 #define INST_SYNC_READ  0x82
@@ -39,7 +42,10 @@ DXLSyncReadDataHeader_t *DXLSyncReadInit(uint16_t starting_addr, uint16_t node_s
 	SRData->starting_addr = starting_addr;
 	SRData->node_size = node_size;
 
-	return buffer; 
+    //printHexForC("DXLSyncReadInit SRData:", (uint32_t)SRData, 0);printForC(" Header size: ", sizeof(DXLSyncReadDataHeader_t),0); printForC(" Offset: ", SRData->offset_received_data, 1); 
+  	//dumpBuffer(NULL, (uint8_t*)SRData, sizeof(DXLSyncReadDataHeader_t));
+
+	return SRData; 
 }
 
 
@@ -82,7 +88,7 @@ int DXLSyncReadSendReceive(DXLSyncReadDataHeader_t *SRData, uint32_t timeout) {
 
 	//protocol 2
 	// We setup the initial area with starting address and the like...
-	//dumpBuffer("TX SYNC_READ", _buffer, _cnt_servos + 4);
+	//dumpBuffer("TX SYNC_READ(c)", (void*)&SRData->starting_addr, SRData->cnt_servos + 4);
 	if (!DXLTxPacketInst(DXL_BROADCAST_ID, INST_SYNC_READ, (void*)&SRData->starting_addr,  SRData->cnt_servos + 4)) return false; // failed on tx
 
 	uint32_t time_last_packet = millis();
@@ -91,17 +97,20 @@ int DXLSyncReadSendReceive(DXLSyncReadDataHeader_t *SRData, uint32_t timeout) {
 	{
 		const dxl_packet_t *prx = DXLRxPacket();
 		if (prx  && prx->type == RX_PACKET_TYPE_STATUS) {
-			  psrri->id     = prx->id;
-			  psrri->error  = prx->error;
-			  psrri->length = prx->param_length;
+			psrri->id     = prx->id;
+			psrri->error  = prx->error;
+			psrri->length = prx->param_length;
 		  	//Serial.printf("%x %x %d: ", prx->id, prx->error, prx->param_length);
+		    //printHexForC(NULL, (uint32_t)psrri, 0);printForC(" ", prx->id, 0); printForC(" ", prx->error, 0); printForC(" ", prx->param_length, 1);
 		  	//dumpBuffer("RX SYNC_READ", prx->p_param, prx->param_length);
 		  	memcpy(psrri->data, prx->p_param, (psrri->length < SRData->node_size) ? psrri->length : SRData->node_size);
 
 		  	SRData->cnt_received++;
 		  	psrri = (DXLSyncReadReturnItem_t *)(((uint8_t*)psrri) + 4 + SRData->node_size);
-		  	if (SRData->cnt_received >= SRData->cnt_servos)
+		  	if (SRData->cnt_received >= SRData->cnt_servos) {
+				//dumpBuffer("TX SYNC_READ(c)", ((uint8_t*)SRData + SRData->offset_received_data),(uint32_t)psrri - (uint32_t)((uint8_t*)SRData + SRData->offset_received_data));
 		    	return  SRData->cnt_servos;
+		  	}
 		  	time_last_packet = millis();
 		}
 
@@ -129,26 +138,32 @@ DXLSyncReadReturnItem_t *DXLSyncReadretrieveItem(DXLSyncReadDataHeader_t *SRData
     return NULL;
 }
 
+DXLSyncReadReturnItem_t *DXLSyncReadretrieveItemByIndex(DXLSyncReadDataHeader_t *SRData, uint8_t index) {
+	if (!SRData) return NULL;
+	if (index >= SRData->cnt_received) return NULL;
+	return (DXLSyncReadReturnItem_t *)((uint8_t*)SRData + SRData->offset_received_data + index*(4 + SRData->node_size));
+}
 
 uint8_t DXLSyncReadRetrieveIDByIndex(DXLSyncReadDataHeader_t *SRData, uint8_t index) {
-  DXLSyncReadReturnItem_t *psrri = DXLSyncReadretrieveItem(SRData, index);
-  return psrri ? psrri->id : 0xff;
+	DXLSyncReadReturnItem_t *psrri = DXLSyncReadretrieveItemByIndex(SRData, index);
+	printHexForC("psrri: ", (uint32_t)psrri, 0);
+	return psrri ? psrri->id : 0xff;
 }
 
 uint8_t DXLSyncReadRetrieveErrorByIndex(DXLSyncReadDataHeader_t *SRData, uint8_t index) {
-  DXLSyncReadReturnItem_t *psrri = DXLSyncReadretrieveItem(SRData, index);
-  return psrri ? psrri->error : 0xff;
+	DXLSyncReadReturnItem_t *psrri = DXLSyncReadretrieveItemByIndex(SRData, index);
+	return psrri ? psrri->error : 0xff;
 }
 uint16_t DXLSyncReadRetrieveLengthByIndex(DXLSyncReadDataHeader_t *SRData, uint8_t index) {
-  DXLSyncReadReturnItem_t *psrri = DXLSyncReadretrieveItem(SRData, index);
-  return psrri ? psrri->length : 0xff;
+	DXLSyncReadReturnItem_t *psrri = DXLSyncReadretrieveItemByIndex(SRData, index);
+	return psrri ? psrri->length : 0xff;
 }
 
 int DXLSyncReadRetrieveValueByIndex(DXLSyncReadDataHeader_t *SRData, uint8_t index, void *val, uint16_t val_offset, uint16_t val_length) {
-  DXLSyncReadReturnItem_t *psrri = DXLSyncReadretrieveItem(SRData, index);
-  if (!psrri) return 0;
-  if (val_length == 0xffff) val_length = SRData->node_size;
-  if ((val_offset + val_length) > SRData->node_size) return 0;
-  memcpy(val, &psrri->data[val_offset], val_length);
-  return 1;
+  DXLSyncReadReturnItem_t *psrri = DXLSyncReadretrieveItemByIndex(SRData, index);
+	if (!psrri) return 0;
+	if (val_length == 0xffff) val_length = SRData->node_size;
+	if ((val_offset + val_length) > SRData->node_size) return 0;
+	memcpy(val, &psrri->data[val_offset], val_length);
+	return 1;
 }
