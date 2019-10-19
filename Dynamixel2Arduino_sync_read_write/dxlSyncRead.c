@@ -146,7 +146,7 @@ DXLSyncReadReturnItem_t *DXLSyncReadretrieveItemByIndex(DXLSyncReadDataHeader_t 
 
 uint8_t DXLSyncReadRetrieveIDByIndex(DXLSyncReadDataHeader_t *SRData, uint8_t index) {
 	DXLSyncReadReturnItem_t *psrri = DXLSyncReadretrieveItemByIndex(SRData, index);
-	printHexForC("psrri: ", (uint32_t)psrri, 0);
+	//printHexForC("psrri: ", (uint32_t)psrri, 0);
 	return psrri ? psrri->id : 0xff;
 }
 
