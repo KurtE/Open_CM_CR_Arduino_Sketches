@@ -4,9 +4,10 @@
 extern "C" {
 void dumpBuffer(const char *title, const uint8_t *pb, uint16_t count) {
   if (title) Serial.println(title);
+  Serial.printf("0000: ");
   for (uint16_t i = 0; i < count; i++) {
     Serial.printf("%02x ", *pb++);
-    if ((i & 0xf) == 0xf) Serial.println();
+    if ((i & 0xf) == 0xf) Serial.printf("\n%04x: ", i+1);
     }
   Serial.println();
 }
@@ -107,7 +108,7 @@ bool  SyncWrite::send(Dynamixel2Arduino &dxl) {
     _buffer[2] = _starting_addr & 0xff;
     _buffer[3] = _node_size & 0xff;
 
-    return dxl.txPacketInst(DXL_BROADCAST_ID, DYNAMIXEL::INST_SYNC_WRITE, &_buffer[2], _cnt_servos * (_node_size + 1) + 2);
+    return dxl.txInstPacket(DXL_BROADCAST_ID, DXL_INST_SYNC_READ, &_buffer[2], _cnt_servos * (_node_size + 1) + 2);
   }
   //protocol 2
   _buffer[0] = _starting_addr & 0xff;
@@ -115,7 +116,7 @@ bool  SyncWrite::send(Dynamixel2Arduino &dxl) {
   _buffer[2] = _node_size & 0xff;
   _buffer[3] = _node_size >> 8;
   //dumpBuffer("TX SYNC_WRITE", _buffer, _cnt_servos * (_node_size + 1) + 4);
-  return dxl.txPacketInst(DXL_BROADCAST_ID, DYNAMIXEL::INST_SYNC_WRITE, _buffer,  _cnt_servos * (_node_size + 1) + 4);
+  return dxl.txInstPacket(DXL_BROADCAST_ID, DXL_INST_SYNC_WRITE, _buffer,  _cnt_servos * (_node_size + 1) + 4);
 }
 
 //=============================================================================
@@ -237,14 +238,14 @@ bool  SyncRead::doRead(Dynamixel2Arduino &dxl,  uint32_t timeout) {
   SyncReadReturnItem_t *psrri = (SyncReadReturnItem_t *)(&_buffer[4 + _max_servos]);
   // We need to fill in the header information for ths sync write.
   if (!_buffer || !_cnt_servos ) {
-    dxl.setLastLibErrCode((DYNAMIXEL::lib_err_code_t)DYNAMIXEL::DXL_LIB_ERROR_NULLPTR);
+    dxl.setLastLibErrCode((DXLLibErrorCode)DXL_LIB_ERROR_NULLPTR);
     return false;
   }
 
   if (dxl.getPortProtocolVersion() == 1.0) {
     // Protocol 1 does not support this.
     Serial.println("Error protocol 1...");
-    dxl.setLastLibErrCode((DYNAMIXEL::lib_err_code_t)DYNAMIXEL::DXL_LIB_ERROR_NOT_SUPPORTED);
+    dxl.setLastLibErrCode((DXLLibErrorCode)DXL_LIB_ERROR_NOT_SUPPORTED);
     return false;
   }
 
@@ -254,19 +255,19 @@ bool  SyncRead::doRead(Dynamixel2Arduino &dxl,  uint32_t timeout) {
   _buffer[2] = _node_size & 0xff;
   _buffer[3] = _node_size >> 8;
   //dumpBuffer("TX SYNC_READ", _buffer, _cnt_servos + 4);
-  if (!dxl.txPacketInst(DXL_BROADCAST_ID, DYNAMIXEL::INST_SYNC_READ, _buffer,  _cnt_servos + 4)) return false; // failed on tx
+  if (!dxl.txInstPacket(DXL_BROADCAST_ID, DXL_INST_SYNC_READ, _buffer,  _cnt_servos + 4)) return false; // failed on tx
 
   uint32_t time_last_packet = millis();
   while (1)
   {
-    const DYNAMIXEL::dxl_packet_t *prx = dxl.rxPacket();
-    if (prx  && prx->type == RX_PACKET_TYPE_STATUS) {
+    const InfoToParseDXLPacket_t *prx = dxl.rxStatusPacket(psrri->data, _node_size);
+    if (prx  && prx->inst_idx == DXL_INST_STATUS) {
       psrri->id     = prx->id;
-      psrri->error  = prx->error;
-      psrri->length = prx->param_length;
+      psrri->error  = prx->err_idx;
+      psrri->length = _node_size;
       //Serial.printf("%x %x %d: ", prx->id, prx->error, prx->param_length);
       //dumpBuffer("RX SYNC_READ", prx->p_param, prx->param_length);
-      memcpy(psrri->data, prx->p_param, (psrri->length < _node_size) ? psrri->length : _node_size);
+      //memcpy(psrri->data, prx->p_param, (psrri->length < _node_size) ? psrri->length : _node_size);
 
       _cnt_received++;
       psrri = (SyncReadReturnItem_t *)(((uint8_t*)psrri) + 4 + _node_size);
@@ -276,7 +277,7 @@ bool  SyncRead::doRead(Dynamixel2Arduino &dxl,  uint32_t timeout) {
     }
 
     if (millis() - time_last_packet >= timeout) {
-      dxl.setLastLibErrCode((DYNAMIXEL::lib_err_code_t)DYNAMIXEL::DXL_LIB_ERROR_TIMEOUT);
+      dxl.setLastLibErrCode((DXLLibErrorCode)DXL_LIB_ERROR_TIMEOUT);
       return false;
     }
   }

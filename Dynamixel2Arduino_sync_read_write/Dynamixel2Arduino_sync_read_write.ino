@@ -22,18 +22,21 @@
 #define DEBUG_SERIAL Serial
 const uint8_t DXL_DIR_PIN = 28; //OpenCM9.04 EXP Board's DIR PIN. (To use the DXL port on the OpenCM 9.04 board, you must use 28 for DIR PIN.)
 
-const uint8_t ServoIDList[] = {19, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12};
+const uint8_t ServoIDList[] = {19, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12, 13, 15, 17, 14, 16, 18};
 #define DXL_X_GOAL_POSITION        116 // 4
+#define DXL_X_PRESENT_LOAD         126 // 2
+#define DXL_X_PRESENT_VELOCITY     128 // 4
 #define DXL_X_PRESENT_POSITION     132 // 4 (R)
 #define DXL_X_PRESENT_INPUT_VOLTAGE  144 // 2 (R)
 #define DXL_X_PRESENT_TEMPERATURE  146 // 1 (R)
 Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN);
 
+uint8_t sync_read_buf[256];
+
 SyncWrite syncwrite(DXL_X_GOAL_POSITION, 4, sizeof(ServoIDList));  // setup for a sync write starting at address 116, for 4 bytes for 2 servos.
 SyncRead  syncread(DXL_X_PRESENT_POSITION, 4, sizeof(ServoIDList));  // setup to do sync read on 128, 4 bytes 2 servos
-
-DXLSyncReadDataHeader_t *syncread_c = nullptr;
-
+#define MAX_SERVOS_WITH_ERRORS_TO_ALLOW_SYNCWRITE 5
+uint8_t cnt_servos_reporting_errors = 0;
 void setup() {
   // put your setup code here, to run once:
   while (!DEBUG_SERIAL) ;
@@ -45,44 +48,68 @@ void setup() {
 
   dxl.begin(1000000); // Working with the XL430-W250
   //  dxl.scan();
-  XelInfoFromPing_t ping_info;
+  DYNAMIXEL::InfoFromPing_t ping_info;
   delay(250);
 
   // create a C Sync read object
-  syncread_c = DXLSyncReadInit(DXL_X_PRESENT_INPUT_VOLTAGE, 3, sizeof(ServoIDList), nullptr, 0);
+
+  //  syncread_c = DXLSyncReadInit(DXL_X_PRESENT_INPUT_VOLTAGE, 3, sizeof(ServoIDList), nullptr, 0);
 
   // fill the members of structure for syncWrite
   //syncwrite.init(); // initialize buffers addID will  automatically call this as well
   for (uint8_t i = 0; i < sizeof(ServoIDList); i++) {
     if (dxl.ping(ServoIDList[i], &ping_info, 1)) {
-      DEBUG_SERIAL.printf("  %d Type:%x Ver:%x\n", ServoIDList[i],
-                    ping_info.model_number, ping_info.firmware_version);
+      uint8_t packet_error = dxl.getLastStatusPacketError();
+      //??? Do I need to do this?
+      if (dxl.getPortProtocolVersion() == 1.0) {
+        ping_info.model_number = dxl.getModelNumber(ping_info.id);
+      }
+      dxl.setModelNumber(ping_info.id, ping_info.model_number);
+
+      DEBUG_SERIAL.printf("  %d Type:%x Ver:%x Err:%x", ServoIDList[i],
+                          ping_info.model_number, ping_info.firmware_version, packet_error);
+      Serial.printf(" Position: %d", (uint32_t)dxl.getPresentPosition(ServoIDList[i]));
+      if (packet_error & 0x80) {
+        // Hardware error, try to reset the servo...
+        uint8_t hw_error;
+        dxl.read(ServoIDList[i], 70, 1, &hw_error, 1, 100);
+        DEBUG_SERIAL.print(F(", HW error:"));  DEBUG_SERIAL.print(hw_error); DEBUG_SERIAL.print(" ");
+        DEBUG_SERIAL.print(F(" *** reboot Servo ***"));
+        dxl.torqueOff(ServoIDList[i]);
+        dxl.reboot(ServoIDList[i], 25);
+        cnt_servos_reporting_errors++;
+        delay(25);
+      }
+      Serial.println();
     }
     dxl.torqueOff(ServoIDList[i]);
     dxl.setOperatingMode(ServoIDList[i], OP_POSITION);
     dxl.torqueOn(ServoIDList[i]);
     syncwrite.addID(ServoIDList[i]);
     syncread.addID(ServoIDList[i]);
-    DXLSyncReadAddID(syncread_c, ServoIDList[i]);
+    //    DXLSyncReadAddID(syncread_c, ServoIDList[i]);
   }
+  Serial.printf("Count of servos reporting errors: %d\n", cnt_servos_reporting_errors);
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
   static int32_t position = 2048;
   static int32_t position_increment = 16;
   static const int32_t MAX_POS_DELTA = 256;
   int32_t recv_position;
 
+
   // set value to data buffer for syncWrite
-  position += position_increment;
-  if ((position >= (2048 + MAX_POS_DELTA)) || (position <= (2048 - MAX_POS_DELTA))) {
-    position_increment = -position_increment;  // reverse direction
+  if (cnt_servos_reporting_errors < MAX_SERVOS_WITH_ERRORS_TO_ALLOW_SYNCWRITE) {
+    position += position_increment;
+    if ((position >= (2048 + MAX_POS_DELTA)) || (position <= (2048 - MAX_POS_DELTA))) {
+      position_increment = -position_increment;  // reverse direction
+    }
+    for (uint8_t i = 0; i < sizeof(ServoIDList); i++) {
+      syncwrite.setItemByIndex(i, &position);
+    }
+    syncwrite.send(dxl);
   }
-  for (uint8_t i = 0; i < sizeof(ServoIDList); i++) {
-    syncwrite.setItemByIndex(i, &position);
-  }
-  syncwrite.send(dxl);
   delay(100);
 
   // Print the read data using SyncRead
@@ -96,68 +123,67 @@ void loop() {
   }
   DEBUG_SERIAL.print(F(" Items Returned: "));
   DEBUG_SERIAL.println(syncread.receiveCount(), DEC);
-
+  cnt_servos_reporting_errors = 0;
   for (uint8_t index = 0; index < syncread.receiveCount(); index++) {
     DEBUG_SERIAL.print(F("Index: ")); DEBUG_SERIAL.print(index); DEBUG_SERIAL.print(" ");
     uint8_t id = syncread.retrieveIDByIndex(index);
     DEBUG_SERIAL.print(F("ID: ")); DEBUG_SERIAL.print(id); DEBUG_SERIAL.print(" ");
     syncread.retrieveValueByIndex(index, &recv_position);
-    DEBUG_SERIAL.print(F(", Present Velocity: ")); DEBUG_SERIAL.print(recv_position); DEBUG_SERIAL.print(" ");
+    DEBUG_SERIAL.print(F(", Present Position: ")); DEBUG_SERIAL.print(recv_position); DEBUG_SERIAL.print(" ");
     uint8_t error = syncread.retrieveErrorByIndex(index);
-    DEBUG_SERIAL.print(F(", Packet Error: ")); DEBUG_SERIAL.print(error); DEBUG_SERIAL.print(" ");
+    DEBUG_SERIAL.print(F(", Packet Error: ")); DEBUG_SERIAL.print(error, HEX); DEBUG_SERIAL.print(" ");
     DEBUG_SERIAL.print(F(", Param Length: ")); DEBUG_SERIAL.print(syncread.retrieveLengthByIndex(index)); DEBUG_SERIAL.print(" ");
     if (error & 0x80) {
       // Hardware error, try to reset the servo...
       uint8_t hw_error;
-      dxl.read(id, 70, 1, &hw_error, 1, 100); 
+      dxl.read(id, 70, 1, &hw_error, 1, 100);
       DEBUG_SERIAL.print(F(", HW error:"));  DEBUG_SERIAL.print(hw_error); DEBUG_SERIAL.print(" ");
       DEBUG_SERIAL.print(F(" *** reboot Servo ***"));
       dxl.torqueOff(id);
       dxl.reboot(id, 25);
+      dxl.setOperatingMode(id, OP_POSITION);
       dxl.torqueOn(id);
-      
+      cnt_servos_reporting_errors++;
     }
-    
     DEBUG_SERIAL.println();
-    
   }
   // Now try a C version of Sync Read
   DEBUG_SERIAL.println(F("======= Sync Read C Version ======="));
-  DXLSyncReadSendReceive(syncread_c, 100);
+
+  beginSyncRead(DXL_X_PRESENT_LOAD, 10); // load velocity position
   DEBUG_SERIAL.print(F(" Items Returned: "));
-  DEBUG_SERIAL.println(DXLSyncReadreceiveCount(syncread_c), DEC);
-  for (uint8_t index = 0; index < DXLSyncReadreceiveCount(syncread_c); index++) {
+  uint8_t sync_return_count = sendSyncRead(sync_read_buf, sizeof(sync_read_buf));
+  DEBUG_SERIAL.println(sync_return_count, DEC);
+  for (uint8_t index = 0; index < sync_return_count; index++) {
     DEBUG_SERIAL.print(F("Index: ")); DEBUG_SERIAL.print(index); DEBUG_SERIAL.print(" ");
-    uint16_t wVoltage;
-    uint8_t bTemp;
+    uint8_t err;
 
-
-    DEBUG_SERIAL.print(F("ID: ")); DEBUG_SERIAL.print(DXLSyncReadRetrieveIDByIndex(syncread_c, index)); DEBUG_SERIAL.print(" ");
-    DXLSyncReadRetrieveValueByIndex(syncread_c, index, &wVoltage, 0, 2);
-    DXLSyncReadRetrieveValueByIndex(syncread_c, index, &bTemp, 2, 1);
-    DEBUG_SERIAL.print(F(", Voltage: ")); DEBUG_SERIAL.print(wVoltage); DEBUG_SERIAL.print(" ");
-    DEBUG_SERIAL.print(F(", Temp: ")); DEBUG_SERIAL.print(bTemp); DEBUG_SERIAL.print(" ");
-    DEBUG_SERIAL.print(F(", Packet Error: ")); DEBUG_SERIAL.print(DXLSyncReadRetrieveErrorByIndex(syncread_c, index)); DEBUG_SERIAL.print(" ");
-    DEBUG_SERIAL.print(F(", Param Length: ")); DEBUG_SERIAL.print(DXLSyncReadRetrieveLengthByIndex(syncread_c, index)); DEBUG_SERIAL.print(" ");
-    DEBUG_SERIAL.println();
-    
+    int id = getSyncReadResultID(index, sync_read_buf, &err);
+    uint16_t load = getSyncReadResult2(index, 0,  sync_read_buf, NULL);
+    uint32_t vel = getSyncReadResult4(index, 2, sync_read_buf, NULL);
+    uint32_t pos = getSyncReadResult4(index, 6, sync_read_buf, NULL);
+    DEBUG_SERIAL.printf("Index: %d ID:%d Error:%x Load:%u vel:%u pos;%u\n", index, id, err, load, vel, pos);
   }
-  
-  Serial.println("Press any key to continue");
-  while (!Serial.available());
-  while (Serial.read() != -1) ;
+  if (cnt_servos_reporting_errors) Serial.printf("Count of servos reporting errors: %d\n", cnt_servos_reporting_errors);
+  if (Serial.available()) {
+    while (Serial.read() != -1) ;
+    Serial.println("Paused: Press any key to continue");
+    while (!Serial.available());
+    while (Serial.read() != -1) ;
+  } else {
+    delay(50);
+  }
   //  delay(1000);
 
 }
 
 // BUGBUG: these need real C version, will hack up for now...
 extern "C" {
-  const dxl_packet_t *DXLRxPacket() {
-    return (const dxl_packet_t *)dxl.rxPacket();
-  }
-
   boolean DXLTxPacketInst(uint8_t id, uint8_t instruction, void* buffer, uint16_t length) {
-    return dxl.txPacketInst(id, instruction, (uint8_t*)buffer, length);
+    return dxl.txInstPacket(id, instruction, (uint8_t*)buffer, length);
   }
 
+  const InfoToParseDXLPacket_t *DXLRxStatusPacket(uint8_t *buffer, uint16_t length) {
+    return dxl.rxStatusPacket(buffer, length);
+  }
 }

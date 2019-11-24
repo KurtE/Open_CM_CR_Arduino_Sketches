@@ -1,4 +1,12 @@
 #include <Dynamixel2Arduino.h>
+#ifndef DXL_MAX_NODE_BUFFER_SIZE
+#define DXL_MAX_NODE_BUFFER_SIZE 8
+#endif
+
+#ifndef DXL_MAX_NODE
+#define DXL_MAX_NODE 254
+#endif
+
 
 class SyncWrite {
 public:
@@ -43,7 +51,6 @@ private:
 	uint8_t			_init = 0;
 	uint8_t			_buffer_malloced = 0;
 };
-
 
 typedef struct {
 	uint8_t 	id;
@@ -103,5 +110,3 @@ private:
 	uint8_t			_buffer_malloced = 0;
 	uint8_t 		_cnt_received = 0;
 };
-
-
