@@ -18,6 +18,10 @@
 #include "syncReadWrite.h"
 #include "dxlSYncRead.h"
 
+extern "C" {
+void dumpBuffer(const char *title, const uint8_t *pb, uint16_t count);
+}
+
 #define DXL_SERIAL   Serial1 //OpenCM9.04 EXP Board's DXL port Serial. (To use the DXL port on the OpenCM 9.04 board, you must use Serial1 for Serial. And because of the OpenCM 9.04 driver code, you must call Serial1.setDxlMode(true); before dxl.begin();.)
 #define DEBUG_SERIAL Serial
 const uint8_t DXL_DIR_PIN = 28; //OpenCM9.04 EXP Board's DIR PIN. (To use the DXL port on the OpenCM 9.04 board, you must use 28 for DIR PIN.)
@@ -39,6 +43,7 @@ SyncRead  syncread(DXL_X_PRESENT_POSITION, 4, sizeof(ServoIDList));  // setup to
 uint8_t cnt_servos_reporting_errors = 0;
 void setup() {
   // put your setup code here, to run once:
+  pinMode(0, OUTPUT);
   while (!DEBUG_SERIAL) ;
   DEBUG_SERIAL.begin(115200);
 #if defined(BOARD_OpenCM904) && (DXL_SERIAL == Serial1)
@@ -149,21 +154,25 @@ void loop() {
   }
   // Now try a C version of Sync Read
   DEBUG_SERIAL.println(F("======= Sync Read C Version ======="));
-
-  beginSyncRead(DXL_X_PRESENT_LOAD, 10); // load velocity position
-  DEBUG_SERIAL.print(F(" Items Returned: "));
+  digitalWrite(0, HIGH);
+  memset (sync_read_buf, 0, sizeof(sync_read_buf));
+  beginSyncRead(DXL_X_PRESENT_INPUT_VOLTAGE, 3); // load velocity position
+  for (uint8_t i = 0; i < sizeof(ServoIDList); i++) {
+    addSyncReadID(ServoIDList[i]);
+  }
   uint8_t sync_return_count = sendSyncRead(sync_read_buf, sizeof(sync_read_buf));
+//  dumpBuffer("After buffer:", sync_read_buf, sizeof(sync_read_buf));
+  DEBUG_SERIAL.print(F(" Items Returned: "));
   DEBUG_SERIAL.println(sync_return_count, DEC);
   for (uint8_t index = 0; index < sync_return_count; index++) {
-    DEBUG_SERIAL.print(F("Index: ")); DEBUG_SERIAL.print(index); DEBUG_SERIAL.print(" ");
     uint8_t err;
-
+    uint16_t result_offset = (uint32_t)getSyncReadResult(index, sync_read_buf, NULL) - (uint32_t)sync_read_buf;
     int id = getSyncReadResultID(index, sync_read_buf, &err);
-    uint16_t load = getSyncReadResult2(index, 0,  sync_read_buf, NULL);
-    uint32_t vel = getSyncReadResult4(index, 2, sync_read_buf, NULL);
-    uint32_t pos = getSyncReadResult4(index, 6, sync_read_buf, NULL);
-    DEBUG_SERIAL.printf("Index: %d ID:%d Error:%x Load:%u vel:%u pos;%u\n", index, id, err, load, vel, pos);
+    uint16_t cur_voltage = getSyncReadResult2(index, 0,  sync_read_buf, NULL);
+    uint8_t cur_temp = getSyncReadResult1(index, 2, sync_read_buf, NULL);
+    DEBUG_SERIAL.printf("Index: %d Offset: %u ID:%d Error:%x volt:%u temp:%u\n", index, result_offset, id, err, cur_voltage, cur_temp);
   }
+  digitalWrite(0, LOW);
   if (cnt_servos_reporting_errors) Serial.printf("Count of servos reporting errors: %d\n", cnt_servos_reporting_errors);
   if (Serial.available()) {
     while (Serial.read() != -1) ;

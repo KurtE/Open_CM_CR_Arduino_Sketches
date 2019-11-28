@@ -24,7 +24,7 @@ uint8_t syncRead(const uint8_t *p_param, uint16_t param_len, uint8_t id_cnt,
                  uint8_t *p_recv_buf, uint16_t recv_buf_capacity, uint32_t timeout)
 {
   // We setup the initial area with starting address and the like...
-  //dumpBuffer("TX SYNC_READ(c)", (void*)&SRData->starting_addr, SRData->cnt_servos + 4);
+  //dumpBuffer("TX SYNC_READ(c)", (void*)p_param, id_cnt + 4);
   // make sure buffer is big enough...
   if (!p_recv_buf || ((id_cnt * (param_len + 2) + 4) > recv_buf_capacity)) {
     return 0;   // no buffer or not big enough...
@@ -49,9 +49,12 @@ uint8_t syncRead(const uint8_t *p_param, uint16_t param_len, uint8_t id_cnt,
     if (prx  && prx->inst_idx == DXL_INST_STATUS) {
       item_ptr[0]     = prx->id;
       item_ptr[1]  = prx->err_idx;
-      //Serial.printf("%x %x %d: ", prx->id, prx->error, prx->param_length);
-      //dumpBuffer("RX SYNC_READ", prx->p_param, prx->param_length);
-
+/*
+      printForC(NULL, prx->id, 0);
+      printHexForC(" ", prx->err_idx, 0);
+      printForC(" ", param_len, 1);
+      dumpBuffer("RX SYNC_READ", &item_ptr[2], param_len);
+*/
       p_recv_buf[1]++; // count received. 
       item_ptr += 2 + param_len;
       if (p_param[1] >= id_cnt)
@@ -86,7 +89,7 @@ bool addSyncReadID(uint8_t id)
 
 uint8_t sendSyncRead(uint8_t *p_recv_buf, uint16_t recv_buf_capacity)
 {
-  return syncRead(g_syncRead_param, 4, g_syncRead_cnt_ids, p_recv_buf, recv_buf_capacity, syncRead_write_default_timeout);
+  return syncRead(g_syncRead_param, (g_syncRead_param[3]<<8)|g_syncRead_param[2], g_syncRead_cnt_ids, p_recv_buf, recv_buf_capacity, syncRead_write_default_timeout);
 }
 
 int getSyncReadResultIDIndex(uint8_t id, uint8_t *p_recv_buf) {
@@ -109,7 +112,7 @@ int getSyncReadResultIDIndex(uint8_t id, uint8_t *p_recv_buf) {
 uint8_t *getSyncReadResult(uint8_t index, uint8_t *p_recv_buf, uint8_t *err) {
   // We need to walk the list to find our item ID... 
   // Maybe we could keep pointer to last one we searched for... 
-  uint16_t param_len = p_recv_buf[2] + p_recv_buf[3] << 8;
+  uint16_t param_len = p_recv_buf[2] + (p_recv_buf[3] << 8);
   uint8_t count_returned = p_recv_buf[1];
 
   if (index >= count_returned) {
@@ -124,7 +127,7 @@ uint8_t *getSyncReadResult(uint8_t index, uint8_t *p_recv_buf, uint8_t *err) {
  
 int getSyncReadResultID(uint8_t index, uint8_t *p_recv_buf, uint8_t *err) {
   uint8_t *pitem_data = getSyncReadResult(index, p_recv_buf, err);
-  if (pitem_data) return pitem_data[0];
+  if (pitem_data) return (uint8_t)pitem_data[-2];
   return -1;
 }
 
