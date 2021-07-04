@@ -14,6 +14,7 @@
 //====================================================================
 #ifndef HEX_CFG_H
 #define HEX_CFG_H
+#include <Arduino.h>
 //==================================================================================================================================
 // Define which input classes we will use. If we wish to use more than one we need to define USEMULTI - This will define a forwarder
 //    type implementation, that the Inputcontroller will need to call.  There will be some negotion for which one is in contol.
@@ -48,7 +49,7 @@
 #endif
 
 #define DEBUG_IOPINS
-#define OPT_MEMORY_USAGE
+//#define OPT_MEMORY_USAGE
 
 #ifdef DEBUG_IOPINS
 #if defined(__OPENCM904__)
@@ -61,6 +62,12 @@
 #define DEBUG_PIN_COMMIT        BDPIN_LED_USER_2
 #define DEBUG_PIN_BACKGROUND    BDPIN_LED_USER_3
 #define DEBUG_PIN_BEGIN_UPDATE  BDPIN_LED_USER_4
+#else  // Teens?
+#define DEBUG_PIN_STEP          18
+#define DEBUG_PIN_COMMIT        19
+#define DEBUG_PIN_BACKGROUND    20
+#define DEBUG_PIN_BEGIN_UPDATE  21
+
 #endif
 #define DebugToggle(pin)  {digitalWrite(pin, !digitalRead(pin));}
 #define DebugWrite(pin, state) {digitalWrite(pin, state);}
@@ -93,12 +100,13 @@
 // Could in theory have 4, but for now just 2
 #if defined(__OPENCM904__)
 #define XBeeSerial Serial2
-#define DXL_PORT_NAME					"1"
-#define DXL_PROTOCOL               		1                 	// See which protocol version is used in the Dynamixel
+#define DXL_SERIAL						Serial1
+#define DXL_DIRECTION_PIN				99						// Need to figure out ???
+#define DXL_PROTOCOL               		1.0                 	// See which protocol version is used in the Dynamixel
 #define DXL_BAUD						1000000				// Primary connection
 
-#define DXL2_PORT_NAME			NULL				// use same port as primary
-#define DXL2_PROTOCOL                	2                 	// See which protocol version is used in the Dynamixel
+#define DXL_SERIAL					Serial1				// use same port as primary
+#define DXL2_PROTOCOL                	2.0               	// See which protocol version is used in the Dynamixel
 #define DXL2_BAUD						1000000				// Primary connection
 
 //[OpenCM pins Numbers]
@@ -108,7 +116,7 @@
 
 #elif defined(__OPENCR__)
 #define XBeeSerial Serial1
-#define DXL_PORT_NAME          ""
+#define DXL_SERIAL          ""
 #define DXL_PROTOCOL                  1                   // See which protocol version is used in the Dynamixel
 #define DXL_BAUD            1000000       // Primary connection
 
@@ -123,6 +131,24 @@
 #define cTurnOffVol  1000     // 10v
 #define cTurnOnVol   1100     // 11V - optional part to say if voltage goes back up, turn it back on...
 
+#elif defined(TEENSYDUINO)
+#define XBeeSerial Serial2
+#define DXL_SERIAL          Serial1
+#define DXL_DIRECTION_PIN			2						// Need to figure out ???
+#define DXL_PROTOCOL                  1                   // See which protocol version is used in the Dynamixel
+#define DXL_BAUD            1000000       // Primary connection
+
+#define DXL2_PORT      Serial1 // use same port as primary
+#define DXL2_DIRECTION_PIN			2						// Need to figure out ???
+#define DXL2_PROTOCOL                 2                   // See which protocol version is used in the Dynamixel
+#define DXL2_BAUD           1000000       // Primary connection
+
+//[OpenCR Pin Numbers]
+#define SOUND_PIN    -1     // OpenCR has buzzer on board
+#define USER  -1        // First user LED on OPENCR
+//#define cVoltagePin  BDPIN_BAT_PWR_ADC  // They have built in voltage divider
+#define cTurnOffVol  1000     // 10v
+#define cTurnOnVol   1100     // 11V - optional part to say if voltage goes back up, turn it back on...
 #endif
 //--------------------------------------------------------------------
 //[Arbotix Pin Numbers]

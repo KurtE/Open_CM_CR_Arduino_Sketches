@@ -22,9 +22,9 @@ extern "C" {
 void dumpBuffer(const char *title, const uint8_t *pb, uint16_t count);
 }
 
-#define DXL_SERIAL   Serial1 //OpenCM9.04 EXP Board's DXL port Serial. (To use the DXL port on the OpenCM 9.04 board, you must use Serial1 for Serial. And because of the OpenCM 9.04 driver code, you must call Serial1.setDxlMode(true); before dxl.begin();.)
+#define DXL_SERIAL   Serial2 //OpenCM9.04 EXP Board's DXL port Serial. (To use the DXL port on the OpenCM 9.04 board, you must use Serial1 for Serial. And because of the OpenCM 9.04 driver code, you must call Serial1.setDxlMode(true); before dxl.begin();.)
 #define DEBUG_SERIAL Serial
-const uint8_t DXL_DIR_PIN = 28; //OpenCM9.04 EXP Board's DIR PIN. (To use the DXL port on the OpenCM 9.04 board, you must use 28 for DIR PIN.)
+const uint8_t DXL_DIR_PIN = 6; //OpenCM9.04 EXP Board's DIR PIN. (To use the DXL port on the OpenCM 9.04 board, you must use 28 for DIR PIN.)
 
 const uint8_t ServoIDList[] = {19, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12, 13, 15, 17, 14, 16, 18};
 #define DXL_X_GOAL_POSITION        116 // 4

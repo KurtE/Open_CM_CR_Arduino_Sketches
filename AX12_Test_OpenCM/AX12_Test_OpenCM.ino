@@ -270,7 +270,7 @@ typedef union {
 
 enum           {SERVO_NOT_FOUND = 0, SERVO_PROTOCOL1 = 1, SERVO_PROTOCOL2};
 
-SERVO_PROT_PORT_t        g_servo_protocol[255] = {SERVO_NOT_FOUND};  // What type of servos do we have????
+SERVO_PROT_PORT_t        g_servo_protocol[255] = {SERVO_NOT_FOUND,};  // What type of servos do we have????
 
 uint8_t        g_count_servos_found = 0;
 
@@ -975,7 +975,7 @@ void PrintServoValues(void) {
     return;
   if (!FGetNextCmdNum(&w_reg_count))
     w_reg_count = 50;
-  for (int i = 0; i < w_reg_count; i++) {
+  for (word i = 0; i < w_reg_count; i++) {
     Serial.print(i, DEC);
     Serial.print(":");
 #ifdef DEBUG_IO_PINS
